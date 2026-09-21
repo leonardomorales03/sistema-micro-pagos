@@ -1,0 +1,74 @@
+# =============================================================
+#  frontend-user/.gitignore  —  ESPECÍFICO REACT 18 + VITE 5
+#
+#  AUTONOMÍA: Si frontend-user/ se convierte en REPOSITORIO GIT
+#  INDEPENDIENTE, este archivo contiene TODAS las reglas.
+# =============================================================
+
+# ──────────────────────────────────────────────────────────────
+#  DEPENDENCIAS — Node.js
+# ──────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# ──────────────────────────────────────────────────────────────
+#  BUILD VITE (salida producción)
+# ──────────────────────────────────────────────────────────────
+dist/
+dist-ssr/
+build/
+.output/
+.nuxt/
+.next/
+out/
+
+# ──────────────────────────────────────────────────────────────
+#  CACHE VITE, PARCEL, WEBPACK, TURBO
+# ──────────────────────────────────────────────────────────────
+.vite/
+.cache/
+.parcel-cache/
+.webpack/
+.turbo/
+*.tsbuildinfo
+
+# ──────────────────────────────────────────────────────────────
+#  LOGS PACKAGE MANAGERS (npm / pnpm / yarn)
+# ──────────────────────────────────────────────────────────────
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+logs/
+*.log
+
+# ──────────────────────────────────────────────────────────────
+#  LINT CACHES
+# ──────────────────────────────────────────────────────────────
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# ──────────────────────────────────────────────────────────────
+#  COBERTURA TESTS VITEST
+# ──────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+*.lcov
+html-report/
+
+# ──────────────────────────────────────────────────────────────
+#  VARIABLES DE ENTORNO LOCALES (sólo .example se versiona)
+# ──────────────────────────────────────────────────────────────
+.env.local
+.env.*.local
+
+# ──────────────────────────────────────────────────────────────
+#  EDITORES ESPECÍFICOS FRONTEND LOCAL (si hay; los IDE globales van en root)
+# ──────────────────────────────────────────────────────────────
+.storybook-out/
+server/
+*.local

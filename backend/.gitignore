@@ -1,0 +1,82 @@
+# =============================================================
+#  backend/.gitignore  —  ESPECÍFICO BACKEND SPRING BOOT JAVA 21
+#
+#  AUTONOMÍA: Si backend/ se convierte en REPOSITORIO GIT
+#  INDEPENDIENTE, este archivo contiene TODAS las reglas.
+#  No depende de ningún .gitignore raíz.
+# =============================================================
+
+# ──────────────────────────────────────────────────────────────
+#  BUILD MAVEN / GRADLE
+# ──────────────────────────────────────────────────────────────
+target/
+build/
+.gradle/
+out/
+dist/
+*.jar
+!mvnw
+!mvnw.cmd
+!gradle-wrapper.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
+
+# ──────────────────────────────────────────────────────────────
+#  MAVEN WRAPPER (si se regenera, no commitear .jar excepto wrapper)
+# ──────────────────────────────────────────────────────────────
+.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/maven-wrapper.properties
+.mvn/jvm.config
+.mvn/maven.config
+
+# ──────────────────────────────────────────────────────────────
+#  SPRING BOOT
+# ──────────────────────────────────────────────────────────────
+.spring-boot-devtools.properties
+spring-shell.log
+heapdump.hprof
+heapdump.hprof.*.gz
+
+# ──────────────────────────────────────────────────────────────
+#  FLYWAY — placeholders / estado local (SOLO si hay)
+# ──────────────────────────────────────────────────────────────
+flyway.placeholders.*
+**/flyway/state/
+
+# ──────────────────────────────────────────────────────────────
+#  LOGS
+# ──────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ──────────────────────────────────────────────────────────────
+#  COBERTURA / REPORTS TESTS
+# ──────────────────────────────────────────────────────────────
+coverage/
+jacoco/
+surefire-reports/
+failsafe-reports/
+*.lcov
+html-report/
+.nyc_output/
+
+# ──────────────────────────────────────────────────────────────
+#  DOCKER — volumes LOCALES (NUNCA commitear datos persistentes)
+#  Nota: infra/ AHORA VIVE aquí dentro desde reorganización
+# ──────────────────────────────────────────────────────────────
+infra/.env
+infra/data/
+infra/postgres/data/
+infra/redis/data/
+
+# ──────────────────────────────────────────────────────────────
+#  DOCKERIGNORE (se mantiene, no regla git)
+# ──────────────────────────────────────────────────────────────
+# (.dockerignore se versiona, NO ignorar)

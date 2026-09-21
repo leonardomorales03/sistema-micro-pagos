@@ -1,0 +1,110 @@
+# ======================================================
+#  EditorConfig — sistema-micro-pagos
+#  Consistencia indentación TODOS los editores/IDEs
+# ======================================================
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# ──────────────────────────────────────────────────────
+#  BACKEND — Java + Spring Boot
+#  Nota: el spec usa 4 espacios para Java (estándar Sun/Oracle)
+# ──────────────────────────────────────────────────────
+[backend/**/*.java]
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+[backend/**/*.xml]
+indent_style = space
+indent_size = 2
+
+[backend/**/*.sql]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+[backend/**/*.yml]
+indent_style = space
+indent_size = 2
+
+[backend/**/*.yaml]
+indent_style = space
+indent_size = 2
+
+[backend/**/*.properties]
+indent_style = space
+indent_size = 4
+
+# ──────────────────────────────────────────────────────
+#  FRONTEND — TypeScript + React + Vite
+# ──────────────────────────────────────────────────────
+[frontend-user/**/*.{ts,tsx,js,jsx}]
+indent_style = space
+indent_size = 2
+max_line_length = 100
+
+[frontend-admin/**/*.{ts,tsx,js,jsx}]
+indent_style = space
+indent_size = 2
+max_line_length = 100
+
+[frontend-user/**/*.{css,scss,html}]
+indent_style = space
+indent_size = 2
+
+[frontend-admin/**/*.{css,scss,html}]
+indent_style = space
+indent_size = 2
+
+# ──────────────────────────────────────────────────────
+#  SCRIPTS — Bash / Makefile
+# ──────────────────────────────────────────────────────
+[scripts/**/*.sh]
+indent_style = space
+indent_size = 2
+max_line_length = 100
+
+[Makefile]
+indent_style = tab
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = 120
+indent_style = space
+indent_size = 2
+
+[*.json]
+indent_style = space
+indent_size = 2
+
+[*.json5]
+indent_style = space
+indent_size = 2
+
+[*.toml]
+indent_style = space
+indent_size = 2
+
+[*.conf]
+indent_style = space
+indent_size = 4
+
+[Dockerfile]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+[docker-compose*.yml]
+indent_style = space
+indent_size = 2
+max_line_length = 120

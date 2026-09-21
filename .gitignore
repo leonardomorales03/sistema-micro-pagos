@@ -1,0 +1,78 @@
+# =============================================================
+#  .gitignore — RAÍZ MONOREPO  (sólamente COMÚN a TODOS los módulos)
+#
+#  CUALQUIER cosa específica de un módulo va EN SU PROPIA CARPETA:
+#    · backend/.gitignore
+#    · frontend-user/.gitignore
+#    · frontend-admin/.gitignore
+#
+#  Si backend se separa a repo INDEPENDIENTE: se lleva su .gitignore.
+#  Si frontend-user se separa a repo INDEPENDIENTE: se lleva su .gitignore.
+# =============================================================
+
+# ──────────────────────────────────────────────────────────────
+#  SECRETOS — NUNCA commitear (común a todos entornos)
+# ──────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.secrets
+*.pem
+*.key
+id_rsa*
+keystore.jks
+
+# ──────────────────────────────────────────────────────────────
+#  SISTEMA OPERATIVO (macOS / Windows)
+# ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.swp
+*.swo
+*~
+
+# ──────────────────────────────────────────────────────────────
+#  IDE / EDITORES — comunes a todos los módulos
+# ──────────────────────────────────────────────────────────────
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.iml
+*.iws
+*.ipr
+.project
+.classpath
+.settings/
+.factorypath
+*.sublime-workspace
+*.sublime-project
+
+# ──────────────────────────────────────────────────────────────
+#  DOCKER — común a todo el proyecto
+#  Nota: infra/ ahora está en backend/infra; reglas específicas
+#  de volumes data ahora están en backend/.gitignore
+# ──────────────────────────────────────────────────────────────
+docker-compose.override.yml
+*.docker.local
+
+# ──────────────────────────────────────────────────────────────
+#  E2E / PLAYWRIGHT — reportes generados en workspace raíz
+# ──────────────────────────────────────────────────────────────
+test-results/
+playwright-report/
+playwright/.cache/
+blob-report/
+
+# ──────────────────────────────────────────────────────────────
+#  LOGS / TEMP GENERICOS (por si alguien escribe en raíz)
+#  Cada módulo tiene reglas específicas en su propio .gitignore
+# ──────────────────────────────────────────────────────────────
+tmp/
+temp/
+*.tmp
+*.bak
+*.pid

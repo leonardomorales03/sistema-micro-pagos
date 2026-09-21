@@ -1,0 +1,24 @@
+# Root .dockerignore — builds FUTUROS NO-backend (frontends).
+# Nota: Infraestructura Docker (compose, nginx, initdb) VIVE DENTRO
+#       backend/infra/ para autonomía del módulo backend.
+.git/
+.github/
+.kiro/
+.idea/
+.vscode/
+node_modules/
+target/
+build/
+dist/
+*.log
+logs/
+tmp/
+.DS_Store
+.env
+.env.local
+.secrets
+coverage/
+playwright-report/
+backend/infra/postgres/data/
+backend/infra/redis/data/
+backend/infra/data/
