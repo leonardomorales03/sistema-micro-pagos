@@ -1,0 +1,35 @@
+# =============================================================
+#  application-dev.yml — PERFIL DESARROLLO LOCAL
+#  Solo development; NUNCA settings de prod aquí
+# =============================================================
+spring:
+  config:
+    activate.on-profile: dev
+  jpa:
+    show-sql: true
+    properties.hibernate.format_sql: true
+  jackson.serialization.indent_output: true
+  freemarker:
+    cache: false
+  mail:
+    host: localhost
+    port: 1025
+    properties.mail.smtp.starttls.enable: false
+
+# Logging detallado en dev
+logging:
+  level:
+    root: INFO
+    com.micropay.backend: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.security: DEBUG
+    org.springframework.cache: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{40}) - %msg%n"
+
+# Swagger UI accesible sin auth en dev
+springdoc:
+  swagger-ui.try-it-out-enabled: true
+  api-docs.enabled: true

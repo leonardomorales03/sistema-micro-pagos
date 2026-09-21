@@ -1,0 +1,243 @@
+# =============================================================
+#  application.yml — BACKEND MICROPAGOS (Configuración BASE)
+#  Perfiles: dev | test | sandbox | prod
+#  NO poner secretos aquí — usar variables de entorno o perfil
+# =============================================================
+spring:
+  application:
+    name: sistema-micro-pagos-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+    group:
+      dev: dev,actuator-info
+      test: test
+      sandbox: sandbox,dev,actuator-info
+      prod: prod,actuator-info
+  main:
+    banner-mode: console
+    allow-bean-definition-overriding: false
+    web-application-type: servlet
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+  mvc:
+    throw-exception-if-no-handler-found: true
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain,text/css,application/javascript
+    min-response-size: 2048
+
+# =============================================================
+#  DATASOURCE — PostgreSQL (sobreescrito por perfil)
+# =============================================================
+spring.datasource:
+  url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/micropay}
+  username: ${SPRING_DATASOURCE_USERNAME:app_user}
+  password: ${SPRING_DATASOURCE_PASSWORD:}
+  driver-class-name: org.postgresql.Driver
+  hikari:
+    pool-name: MicropayHikariPool
+    maximum-pool-size: 20
+    minimum-idle: 5
+    connection-timeout: 30000
+    idle-timeout: 600000
+    max-lifetime: 1800000
+    leak-detection-threshold: 60000
+    auto-commit: false
+
+# =============================================================
+#  JPA / HIBERNATE — validate NUNCA create-drop
+# =============================================================
+spring.jpa:
+  open-in-view: false
+  hibernate.ddl-auto: validate
+  show-sql: ${SPRING_JPA_SHOW_SQL:false}
+  format-sql: true
+  properties:
+    hibernate:
+      # PostgreSQL16Dialect NO existe en Hibernate 6.x (SB3.3); usar genérico PostgreSQLDialect — auto-detecta 16 por driver)
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+      default_schema: public
+      jdbc.batch_size: 50
+      order_inserts: true
+      order_updates: true
+      query.in_clause_parameter_padding: true
+      generate_statistics: false
+
+# =============================================================
+#  FLYWAY — Migraciones versionadas
+# =============================================================
+spring.flyway:
+  enabled: true
+  locations: classpath:db/migration
+  baseline-on-migrate: false
+  out-of-order: false
+  validate-on-migrate: true
+  encoding: UTF-8
+
+# =============================================================
+#  REDIS — Caché + Bloqueos + Velocity Counters
+# =============================================================
+spring.data.redis:
+  host: ${SPRING_DATA_REDIS_HOST:localhost}
+  port: ${SPRING_DATA_REDIS_PORT:6379}
+  password: ${REDIS_PASSWORD:}
+  database: ${REDIS_DB:0}
+  timeout: 2000ms
+  lettuce:
+    pool:
+      max-active: 20
+      max-idle: 10
+      min-idle: 5
+      max-wait: 1000ms
+
+# =============================================================
+#  CACHÉ SPRING + RedisCacheManager
+# =============================================================
+spring.cache:
+  type: redis
+  redis:
+    time-to-live: 60000
+    cache-null-values: false
+    use-key-prefix: true
+    key-prefix: "micropay::"
+
+# =============================================================
+#  SEGURIDAD — JWT (claves por variable entorno)
+# =============================================================
+micropay.jwt:
+  secret-key: ${SPRING_JWT_SECRET_KEY:}
+  access-token-expiration-ms: ${SPRING_JWT_ACCESS_TOKEN_EXPIRATION_MS:900000}
+  refresh-token-expiration-ms: ${SPRING_JWT_REFRESH_TOKEN_EXPIRATION_MS:604800000}
+  refresh-token-cookie-name: ${SPRING_JWT_REFRESH_TOKEN_COOKIE_NAME:MICROPAY_REFRESH_TOKEN}
+  issuer: ${SPRING_JWT_ISSUER:micropay-backend}
+
+# =============================================================
+#  STRIPE — Pagos (perfil dev/test usa claves sandbox)
+# =============================================================
+micropay.stripe:
+  publishable-key: ${STRIPE_PUBLISHABLE_KEY:}
+  secret-key: ${STRIPE_SECRET_KEY:}
+  webhook-signing-secret: ${STRIPE_WEBHOOK_SIGNING_SECRET:}
+  connect-client-id: ${STRIPE_CONNECT_CLIENT_ID:}
+  account-country: ${STRIPE_ACCOUNT_COUNTRY:CO}
+  api-version: "2024-09-30.acacia"
+
+# =============================================================
+#  OPENAPI — SpringDoc (genera spec y swagger UI)
+# =============================================================
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+    disable-swagger-default-url: true
+  openapi:
+    info:
+      title: Sistema de Micro-Pagos API
+      version: 0.1.0
+      description: API v1 oficial del Sistema de Micro-Pagos (Hexagonal + ACID)
+      terms-of-service: https://example.com/terms
+      contact:
+        name: API Support
+        email: api-support@micropay.example
+    version: "3.1.0"
+  show-actuator: true
+  writer-with-default-pretty-printer: true
+
+# =============================================================
+#  ACTUATOR — Monitoreo (exponer sólo endpoints seguros)
+# =============================================================
+management:
+  endpoints:
+    web:
+      exposure.include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes.enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  info:
+    env.enabled: true
+    build.enabled: true
+    java.enabled: true
+    os.enabled: true
+
+# =============================================================
+#  SCHEDULER DISTRIBUIDO — ShedLock (Redis)
+# =============================================================
+micropay.shedlock:
+  enabled: true
+  default-lock-at-most-for: 10m
+  default-lock-at-least-for: 1m
+
+# =============================================================
+#  LÍMITES — Globales (Wallet + Transferencias)
+#  Valores por defecto; fork-CO sobreescribe en su perfil
+# =============================================================
+micropay.limits:
+  global:
+    min-transaction-amount: 100
+    max-daily-total: 20000000
+    max-monthly-total: 100000000
+    max-transactions-per-10min: 15
+    max-withdraw-percent-of-balance: 0.25
+    withdraw-hold-days: 2
+    withdraw-window-days: 15
+  kyc:
+    level0-daily-limit: 1000000
+    level0-monthly-limit: 5000000
+    level1-daily-limit: 10000000
+    level1-monthly-limit: 50000000
+    level2-daily-limit: 50000000
+    level2-monthly-limit: 300000000
+  payment-request:
+    short-code-length: 6
+    expiration-hours: 24
+
+# =============================================================
+#  MULTI-MONEDA — Tasas y USD$1 max en sandbox
+# =============================================================
+micropay.fx:
+  enabled: true
+  default-currency: COP
+  rates:
+    USDCOP: 4100.00
+    EURCOP: 4500.00
+    USDEUR: 0.91
+  sandbox-max-usd: 1.00
+
+# =============================================================
+#  REFERRALS — 5% flat, umbral $10
+# =============================================================
+micropay.referrals:
+  enabled: true
+  reward-percent: 0.05
+  withdrawal-threshold-amount: 10.00
+  withdrawal-threshold-currency: USD

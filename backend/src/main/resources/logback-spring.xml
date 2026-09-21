@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- =========================================================
+     logback-spring.xml — Sistema de Logs Micropay Backend
+     Consola DEV, JSON en PROD, archivos rotados por perfil
+     ========================================================= -->
+<configuration scan="true" scanPeriod="30 seconds">
+
+    <!-- ──────────────────────────────────────────────
+         PROPERTIES GLOBALES
+         ────────────────────────────────────────────── -->
+    <property name="APP_NAME" value="micropay-backend"/>
+    <property name="LOG_DIR" value="./logs"/>
+    <property name="LOG_LEVEL_CONSOLE" value="${LOG_LEVEL_CONSOLE:-INFO}"/>
+    <property name="LOG_LEVEL_FILE" value="${LOG_LEVEL_FILE:-INFO}"/>
+
+    <!-- ──────────────────────────────────────────────
+         APPENDERS → Consola (Human readable DEV)
+         ────────────────────────────────────────────── -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %highlight(%-5level)
+                %cyan(%logger{48}) - %msg%n
+            </pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ──────────────────────────────────────────────
+         APPENDERS → Archivo (JSON estructurado PROD)
+         ────────────────────────────────────────────── -->
+    <appender name="FILE_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/${APP_NAME}.json.log</file>
+        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+            <layout class="ch.qos.logback.contrib.json.classic.JsonLayout">
+                <timestampFormat>yyyy-MM-dd'T'HH:mm:ss.SSSX</timestampFormat>
+                <timestampFormatTimezoneId>America/Bogota</timestampFormatTimezoneId>
+                <appendLineSeparator>true</appendLineSeparator>
+                <includeMDC>true</includeMDC>
+                <jsonFormatter class="ch.qos.logback.contrib.jackson.JacksonJsonFormatter">
+                    <prettyPrint>false</prettyPrint>
+                </jsonFormatter>
+            </layout>
+            <charset>UTF-8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/archived/${APP_NAME}.%d{yyyy-MM-dd}.%i.json.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>5GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Archivo texto rotado (compatibilidad grep) -->
+    <appender name="FILE_TEXT" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/${APP_NAME}.log</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{48}
+                [mdc:%X{traceId},%X{userId},%X{requestId}] - %msg%n
+            </pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/archived/${APP_NAME}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>5GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- ──────────────────────────────────────────────
+         AUDITORÍA → Appender dedicado para transacciones
+         ────────────────────────────────────────────── -->
+    <appender name="AUDIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/${APP_NAME}-audit.log</file>
+        <encoder>
+            <pattern>AUDIT | %d{yyyy-MM-dd HH:mm:ss.SSS} | %X{traceId} | %X{userId}
+                | %msg%n
+            </pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/archived/${APP_NAME}-audit.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>90</maxHistory>
+            <totalSizeCap>20GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Logger AUDIT (transacciones, topup, withdraw, kyc) -->
+    <logger name="AUDIT_LOGGER" level="INFO" additivity="false">
+        <appender-ref ref="AUDIT_FILE"/>
+        <appender-ref ref="FILE_JSON"/>
+    </logger>
+
+    <!-- ──────────────────────────────────────────────
+         PERFILES SPRING — NIVELES ESPECÍFICOS
+         ────────────────────────────────────────────── -->
+    <springProfile name="dev">
+        <root level="${LOG_LEVEL_CONSOLE}">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE_TEXT"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="test">
+        <root level="WARN">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="com.micropay.backend" level="INFO"/>
+    </springProfile>
+
+    <springProfile name="sandbox">
+        <logger name="SANDBOX" level="DEBUG"/>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE_TEXT"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="prod">
+        <root level="${LOG_LEVEL_FILE}">
+            <appender-ref ref="FILE_JSON"/>
+            <appender-ref ref="FILE_TEXT"/>
+        </root>
+        <!-- Silenciar ruido en prod -->
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="org.hibernate.SQL" level="WARN"/>
+        <logger name="io.lettuce" level="WARN"/>
+    </springProfile>
+
+</configuration>

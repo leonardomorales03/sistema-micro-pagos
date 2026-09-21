@@ -1,0 +1,44 @@
+# =============================================================
+#  application-test.yml — PERFIL TESTS (JUnit + Testcontainers)
+#  Valores estables y deterministas; sin random
+# =============================================================
+spring:
+  config:
+    activate.on-profile: test
+  jpa:
+    show-sql: false
+    properties.hibernate.generate_statistics: false
+  flyway:
+    enabled: true
+  cache:
+    type: redis
+  mail:
+    host: localhost
+    port: 25
+    properties.mail.smtp.starttls.enable: false
+
+# JWT — clave estática y de prueba SOLO para CI/tests
+micropay.jwt:
+  secret-key: Y3JpdGljYWxseS11bnNhZmUtand0LXNlY3JldC1mb3ItdGVzdGluZy1vbmx5LWFuZC1jb250ZXh0
+  access-token-expiration-ms: 300000
+  refresh-token-expiration-ms: 86400000
+  issuer: micropay-backend-test
+
+# Stripe — todas las operaciones Mock; NO real
+micropay.stripe:
+  publishable-key: pk_test_FAKE00000000000000000000000000
+  secret-key: sk_test_FAKE00000000000000000000000000
+  webhook-signing-secret: whsec_FAKE00000000000000000000000000
+  connect-client-id: ca_FAKE00000000000000000000000000
+
+# Silenciar logs en tests (performance)
+logging:
+  level:
+    root: WARN
+    com.micropay.backend: INFO
+    org.testcontainers: WARN
+    org.testcontainers.docker: WARN
+  pattern.console: "%d{HH:mm:ss.SSS} [%-5level] %logger{36} - %msg%n"
+
+# Actuator mínimo en tests
+management.endpoints.web.exposure.include: health

@@ -1,0 +1,62 @@
+# =============================================================
+#  application-sandbox.yml — PERFIL SANDBOX 100% OFFLINE
+#  0 llamadas a APIs reales; adaptadores MockStripe/MockBank
+# =============================================================
+spring:
+  config:
+    activate.on-profile: sandbox
+  main.banner-mode: log
+
+# Endpoints administrativos Sandbox
+micropay.sandbox:
+  enabled: true
+  endpoints-base-path: /_sandbox
+  # Tarjetas de test documentadas
+  test-cards:
+    - brand: VISA
+      pan: "4242424242424242"
+      exp: "12/30"
+      cvc: "123"
+      name: "VISA Aprobada"
+      behavior: APPROVE
+    - brand: VISA
+      pan: "4000000000000002"
+      exp: "12/30"
+      cvc: "123"
+      name: "VISA Declinada fondos"
+      behavior: DECLINE_INSUFFICIENT_FUNDS
+    - brand: MC
+      pan: "5555555555554444"
+      exp: "12/30"
+      cvc: "123"
+      name: "Mastercard Aprobada"
+      behavior: APPROVE
+    - brand: AMEX
+      pan: "378282246310005"
+      exp: "12/30"
+      cvc: "1234"
+      name: "Amex Aprobada"
+      behavior: APPROVE
+    - brand: PSE
+      pan: "PSE-APPROVED-001"
+      name: "PSE Aprobada"
+      behavior: APPROVE
+  test-cedulas-colombia:
+    - "1023456789"
+    - "801234567"
+    - "52123456"
+  max-transaction-usd: 1.00
+
+# JWT — sandbox permitiendo tokens largos
+micropay.jwt:
+  access-token-expiration-ms: 86400000
+  refresh-token-expiration-ms: 2592000000
+
+# Límites ultra-relajados en Sandbox
+micropay.limits:
+  global:
+    max-daily-total: 999999999999
+    max-monthly-total: 99999999999999
+    max-withdraw-percent-of-balance: 1.00
+    withdraw-hold-days: 0
+    withdraw-window-days: 0
