@@ -1,0 +1,37 @@
+# Backend .dockerignore — optimiza build context (no copiar estos archivos a Docker
+# ⚠ IMPORTANTE: NO ignorar infra/ completo. Solo los volumes/data/ persistentes.
+# El backend como repo INDEPENDIENTE debe incluir: infra/docker-compose.yml,
+# infra/nginx/*.conf, infra/postgres/initdb/*.sql. (autonomía del módulo)
+target/
+build/
+.gradle/
+*.log
+logs/
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+Dockerfile
+# docker-compose se versiona NO ignorar → se usa en deploy → no ignorar
+# docker-compose*.yml
+README.md
+.env
+.env.local
+.secrets
+node_modules/
+.mvn/wrapper/maven-wrapper.jar
+!mvnw
+!mvnw.cmd
+src/test/
+docs/
+# Solo ignorar los volúmenes locales de data (sensibles, grandes)
+infra/.env
+infra/data/
+infra/postgres/data/
+infra/redis/data/
+scripts/
+frontend-*/
