@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+<meta charset="UTF-8">
+<title>404 — Página no encontrada</title>
+<style>
+    :root { --accent: #6366f1; --bg: #0f172a; --text: #e2e8f0; }
+    * { box-sizing: border-box; margin: 0; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        background: radial-gradient(1200px 600px at 50% -10%, #1e293b 0%, var(--bg) 60%);
+        color: var(--text); display: grid; place-items: center; }
+    .card { text-align: center; padding: 3rem; max-width: 480px; }
+    h1 { font-size: 6rem; font-weight: 900; background: linear-gradient(135deg, var(--accent), #a855f7);
+        -webkit-background-clip: text; background-clip: text; color: transparent; }
+    h2 { font-size: 1.6rem; margin: .6rem 0; }
+    p  { color: #94a3b8; margin-bottom: 2rem; line-height: 1.5; }
+    a  { display: inline-block; padding: .85rem 2rem; background: var(--accent); color: white;
+        border-radius: 10px; text-decoration: none; font-weight: 600; transition: transform .2s; }
+    a:hover { transform: translateY(-2px); }
+</style>
+</head>
+<body>
+<div class="card">
+    <h1>404</h1>
+    <h2>Página no encontrada</h2>
+    <p>La ruta que buscas no existe en MicroPagos.<br>
+       Verifica la URL o regresa al panel principal.</p>
+    <a href="/">← Ir al inicio</a>
+</div>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+<meta charset="UTF-8">
+<title>500 — Error del servidor</title>
+<style>
+    :root { --accent: #ef4444; --bg: #0f172a; --text: #e2e8f0; }
+    * { box-sizing: border-box; margin: 0; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        background: radial-gradient(1200px 600px at 50% -10%, #450a0a 0%, var(--bg) 60%);
+        color: var(--text); display: grid; place-items: center; }
+    .card { text-align: center; padding: 3rem; max-width: 480px; }
+    h1 { font-size: 6rem; font-weight: 900; background: linear-gradient(135deg, var(--accent), #f59e0b);
+        -webkit-background-clip: text; background-clip: text; color: transparent; }
+    h2 { font-size: 1.6rem; margin: .6rem 0; }
+    p  { color: #94a3b8; margin-bottom: 2rem; line-height: 1.5; }
+    .btn { display: inline-block; padding: .85rem 2rem; color: white;
+        border-radius: 10px; text-decoration: none; font-weight: 600; margin: 0 .3rem; }
+    .primary { background: #ef4444; } .secondary { background: #334155; }
+    .row { display: flex; gap: .6rem; justify-content: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="card">
+    <h1>5xx</h1>
+    <h2>El servidor está experimentando problemas</h2>
+    <p>Estamos trabajando para resolverlo lo antes posible.<br>
+       Intenta nuevamente en unos minutos.</p>
+    <div class="row">
+        <a class="btn primary" href="/">Reintentar</a>
+        <a class="btn secondary" href="/admin/">Panel Admin</a>
+    </div>
+</div>
+</body>
+</html>
