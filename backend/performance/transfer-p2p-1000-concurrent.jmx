@@ -1,0 +1,698 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+=====================================================================
+  T14 / T12 JMeter — PLAN DE CARGA P2P 1000 concurrentes A↔B
+  Target spec tasks.md:
+    • Thread Group 1000 hilos, ramp-up 60s, Loop = 10
+    • Transferencias 1 USD alternando Alice→Bob y Bob→Alice
+    • Assertions: HTTP 200 OK (SUCCESS) / 409 Conflict (reintentable, se marca success) / 422 BusinessRuleViolation (fallo duro)
+    • Listeners: Aggregate Report (contiene p95, p99, throughput) y Summary Report
+    • Property 11 (aislamiento concurrencia) + Property 12 (durabilidad) validados después por post-validate.sql
+
+  Ejecución NON-GUI recomendada:
+    JMETER=/opt/homebrew/opt/jmeter
+    $JMETER/bin/jmeter \
+        -n -t backend/performance/transfer-p2p-1000-concurrent.jmx \
+        -l backend/performance/results/transfer-p2p.jtl \
+        -e -o backend/performance/results/dashboard \
+        -Jhost=localhost \
+        -Jport=8080 \
+        -Jprotocol=http \
+        -JseedAmount=1000000 \
+        -JtransferAmount=1 \
+        -Jthreads=1000 \
+        -Jrampup=60 \
+        -Jloops=10
+
+  Antes de ejecutar levantar backend con docker compose up backend (o local) y
+  crear las extensiones (ya listas en V1).
+=====================================================================
+-->
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="T14 Micropay P2P 1000 concurrentes A↔B" enabled="true">
+      <stringProp name="TestPlan.comments"></stringProp>
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="host" elementType="Argument">
+            <stringProp name="Argument.name">host</stringProp>
+            <stringProp name="Argument.value">${__P(host,localhost)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="port" elementType="Argument">
+            <stringProp name="Argument.name">port</stringProp>
+            <stringProp name="Argument.value">${__P(port,8080)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="protocol" elementType="Argument">
+            <stringProp name="Argument.name">protocol</stringProp>
+            <stringProp name="Argument.value">${__P(protocol,http)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="threads" elementType="Argument">
+            <stringProp name="Argument.name">threads</stringProp>
+            <stringProp name="Argument.value">${__P(threads,1000)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="rampup" elementType="Argument">
+            <stringProp name="Argument.name">rampup</stringProp>
+            <stringProp name="Argument.value">${__P(rampup,60)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="loops" elementType="Argument">
+            <stringProp name="Argument.name">loops</stringProp>
+            <stringProp name="Argument.value">${__P(loops,10)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="seedAmount" elementType="Argument">
+            <stringProp name="Argument.name">seedAmount</stringProp>
+            <stringProp name="Argument.value">${__P(seedAmount,1000000)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="transferAmount" elementType="Argument">
+            <stringProp name="Argument.name">transferAmount</stringProp>
+            <stringProp name="Argument.value">${__P(transferAmount,1)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+        </collectionProp>
+      </elementProp>
+      <stringProp name="TestPlan.user_define_classpath"></stringProp>
+    </TestPlan>
+    <hashTree>
+
+      <!-- ============================================================
+           CONFIG HTTP GLOBAL
+           ============================================================ -->
+      <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="HTTP Request Defaults" enabled="true">
+        <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+          <collectionProp name="Arguments.arguments"/>
+        </elementProp>
+        <stringProp name="HTTPSampler.domain">${host}</stringProp>
+        <stringProp name="HTTPSampler.port">${port}</stringProp>
+        <stringProp name="HTTPSampler.protocol">${protocol}</stringProp>
+        <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        <stringProp name="HTTPSampler.path">/api/v1</stringProp>
+        <stringProp name="HTTPSampler.concurrentPool">200</stringProp>
+        <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        <stringProp name="HTTPSampler.connect_timeout">15000</stringProp>
+        <stringProp name="HTTPSampler.response_timeout">30000</stringProp>
+      </ConfigTestElement>
+      <hashTree/>
+
+      <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP Headers (JSON + Accept)" enabled="true">
+        <collectionProp name="HeaderManager.headers">
+          <elementProp name="Content-Type" elementType="Header">
+            <stringProp name="Header.name">Content-Type</stringProp>
+            <stringProp name="Header.value">application/json</stringProp>
+          </elementProp>
+          <elementProp name="Accept" elementType="Header">
+            <stringProp name="Header.name">Accept</stringProp>
+            <stringProp name="Header.value">application/problem+json,application/json</stringProp>
+          </elementProp>
+        </collectionProp>
+      </HeaderManager>
+      <hashTree/>
+
+      <CookieManager guiclass="CookiePanel" testclass="CookieManager" testname="Cookie Manager" enabled="true">
+        <collectionProp name="CookieManager.cookies"/>
+        <boolProp name="CookieManager.clearEachIteration">false</boolProp>
+        <stringProp name="CookieManager.policy">standard</stringProp>
+      </CookieManager>
+      <hashTree/>
+
+      <!-- ============================================================
+           SETUP THREAD GROUP: 1 usuario prepara Alice + Bob
+           Registra users → verifica email (activa) → login → crea wallets → pone seeds
+           Seeds depositados vía SQL pues no hay endpoint admin top-up;
+           si el entorno no tiene DB local las seeds se pueden saltar.
+           ============================================================ -->
+      <SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="setUp - preparar Alice y Bob" enabled="true">
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <boolProp name="ThreadGroup.delayedStart">false</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <intProp name="LoopController.loops">1</intProp>
+        </elementProp>
+      </SetupThreadGroup>
+      <hashTree>
+
+        <!-- 1.1 Registrar Alice -->
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="01 - POST /users/register (Alice)" enabled="true">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="body" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{
+  &quot;email&quot;:&quot;jmeter-alice@example.com&quot;,
+  &quot;password&quot;:&quot;StrongTest123!&quot;,
+  &quot;full_name&quot;:&quot;JMeter Alice Load Test&quot;
+}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.path">${__V(APIV1Path,)}/users/register</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Registro Alice: 201 ó 409 (email ya existe)" enabled="true">
+            <collectionProp name="Asserter.test_strings">
+              <stringProp name="Asserter.test_string">201|409</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.match_type">4</intProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="extraer aliceUserId" enabled="true">
+            <stringProp name="cacheKey">2f470a2c898e33b9</stringProp>
+            <stringProp name="ScriptLanguage">groovy</stringProp>
+            <stringProp name="Parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="script">
+import groovy.json.JsonSlurper
+if (prev.isSuccessful() &amp;&amp; [201,409].contains(prev.getResponseCode() as int)) {
+    if (prev.getResponseDataAsString()) {
+        def j = new JsonSlurper().parseText(prev.getResponseDataAsString())
+        if (j?.id) props.put(&quot;ALICE_USER_ID&quot;, j.id as String)
+    }
+}
+</stringProp>
+          </JSR223PostProcessor>
+          <hashTree/>
+        </hashTree>
+
+        <!-- 1.2 Activar Alice email (por defecto register deja PENDING_EMAIL; endpoint verify-email publico) -->
+        <JSR223PreProcessor guiclass="TestBeanGUI" testclass="JSR223PreProcessor" testname="recover aliceUserId fallback" enabled="true">
+          <stringProp name="ScriptLanguage">groovy</stringProp>
+          <stringProp name="cacheKey">ff18ab56983c39</stringProp>
+          <stringProp name="script">
+if (!props.get(&quot;ALICE_USER_ID&quot;)) {
+    log.warn(&quot;SETUP: ALICE_USER_ID no disponible; validar paso previo&quot;)
+}
+</stringProp>
+        </JSR223PreProcessor>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="02 - POST /users/{id}/verify-email (Alice)" enabled="true">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.path">${__V(APIV1Path,)}/users/${__P(ALICE_USER_ID,NO-USER)}/verify-email</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Alice verify = 204" enabled="true">
+            <collectionProp name="Asserter.test_strings"><stringProp name="Asserter.test_string">204</stringProp></collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <intProp name="Assertion.match_type">8</intProp>
+          </ResponseAssertion><hashTree/>
+        </hashTree>
+
+        <!-- 1.3 Login Alice -->
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="03 - POST /auth/login (Alice)" enabled="true">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;email&quot;:&quot;jmeter-alice@example.com&quot;,&quot;password&quot;:&quot;StrongTest123!&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <stringProp name="HTTPSampler.path">${__V(APIV1Path,)}/auth/login</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Alice login 200">
+            <collectionProp name="Asserter.test_strings"><stringProp>200</stringProp></collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <intProp name="Assertion.match_type">8</intProp>
+          </ResponseAssertion><hashTree/>
+          <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="ALICE_JWT">
+            <stringProp name="cacheKey">aa11ff55b2b</stringProp>
+            <stringProp name="ScriptLanguage">groovy</stringProp>
+            <stringProp name="Script">
+import groovy.json.JsonSlurper
+if (prev.getResponseCode() == &quot;200&quot;) {
+    def j = new JsonSlurper().parseText(prev.getResponseDataAsString())
+    if (j?.access_token) props.put(&quot;ALICE_JWT&quot;, &quot;Bearer &quot; + j.access_token)
+}
+</stringProp>
+          </JSR223PostProcessor><hashTree/>
+        </hashTree>
+
+        <!-- 1.4 Crear wallet USD Alice -->
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="04 - POST /wallets (Alice USD)" enabled="true">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;currency&quot;:&quot;USD&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <stringProp name="HTTPSampler.path">${__V(APIV1Path,)}/wallets</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Auth Alice">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="Authorization" elementType="Header">
+                <stringProp name="Header.name">Authorization</stringProp>
+                <stringProp name="Header.value">${__P(ALICE_JWT,)}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Alice wallet 201 o 409 (ya existe)" enabled="true">
+            <collectionProp name="Asserter.test_strings"><stringProp>201|409</stringProp></collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <intProp name="Assertion.match_type">4</intProp>
+          </ResponseAssertion><hashTree/>
+          <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="ALICE_WALLET_ID">
+            <stringProp name="cacheKey">alice-wallet</stringProp>
+            <stringProp name="ScriptLanguage">groovy</stringProp>
+            <stringProp name="Script">
+import groovy.json.JsonSlurper
+if (prev.isSuccessful() &amp;&amp; prev.getResponseDataAsString()) {
+    def j = new JsonSlurper().parseText(prev.getResponseDataAsString())
+    if (j?.id) props.put(&quot;ALICE_WALLET_ID&quot;, j.id as String)
+}
+</stringProp>
+          </JSR223PostProcessor><hashTree/>
+        </hashTree>
+
+        <!-- =========================================================
+             BOB (mismos pasos 5-8)
+             ========================================================= -->
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="05 - POST /users/register (Bob)" enabled="true">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="body" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{
+  &quot;email&quot;:&quot;jmeter-bob@example.com&quot;,
+  &quot;password&quot;:&quot;StrongTest123!&quot;,
+  &quot;full_name&quot;:&quot;JMeter Bob Load Test&quot;
+}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <stringProp name="HTTPSampler.path">${__V(APIV1Path,)}/users/register</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Bob register 201|409" enabled="true">
+            <collectionProp name="Asserter.test_strings"><stringProp>201|409</stringProp></collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <intProp name="Assertion.match_type">4</intProp>
+          </ResponseAssertion><hashTree/>
+          <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="BOB_USER_ID">
+            <stringProp name="cacheKey">bob-user</stringProp>
+            <stringProp name="ScriptLanguage">groovy</stringProp>
+            <stringProp name="Script">
+import groovy.json.JsonSlurper
+if (prev.isSuccessful() &amp;&amp; prev.getResponseDataAsString()) {
+    def j = new JsonSlurper().parseText(prev.getResponseDataAsString())
+    if (j?.id) props.put(&quot;BOB_USER_ID&quot;, j.id as String)
+}
+</stringProp>
+          </JSR223PostProcessor><hashTree/>
+        </hashTree>
+
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="06 - POST /users/{id}/verify-email (Bob)" enabled="true">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <stringProp name="HTTPSampler.path">${__V(APIV1Path,)}/users/${__P(BOB_USER_ID,NO-USER)}/verify-email</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Bob verify 204">
+            <collectionProp name="Asserter.test_strings"><stringProp>204</stringProp></collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <intProp name="Assertion.match_type">8</intProp>
+          </ResponseAssertion><hashTree/>
+        </hashTree>
+
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="07 - POST /auth/login (Bob)" enabled="true">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="body" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;email&quot;:&quot;jmeter-bob@example.com&quot;,&quot;password&quot;:&quot;StrongTest123!&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <stringProp name="HTTPSampler.path">${__V(APIV1Path,)}/auth/login</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Bob login 200">
+            <collectionProp name="Asserter.test_strings"><stringProp>200</stringProp></collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <intProp name="Assertion.match_type">8</intProp>
+          </ResponseAssertion><hashTree/>
+          <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="BOB_JWT">
+            <stringProp name="cacheKey">bob-jwt</stringProp>
+            <stringProp name="ScriptLanguage">groovy</stringProp>
+            <stringProp name="Script">
+import groovy.json.JsonSlurper
+if (prev.getResponseCode() == &quot;200&quot;) {
+    def j = new JsonSlurper().parseText(prev.getResponseDataAsString())
+    if (j?.access_token) props.put(&quot;BOB_JWT&quot;, &quot;Bearer &quot; + j.access_token)
+}
+</stringProp>
+          </JSR223PostProcessor><hashTree/>
+        </hashTree>
+
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="08 - POST /wallets (Bob USD)" enabled="true">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="body" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;currency&quot;:&quot;USD&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <stringProp name="HTTPSampler.path">${__V(APIV1Path,)}/wallets</stringProp>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Auth Bob">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="Authorization" elementType="Header">
+                <stringProp name="Header.name">Authorization</stringProp>
+                <stringProp name="Header.value">${__P(BOB_JWT,)}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Bob wallet 201|409">
+            <collectionProp name="Asserter.test_strings"><stringProp>201|409</stringProp></collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <intProp name="Assertion.match_type">4</intProp>
+          </ResponseAssertion><hashTree/>
+          <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="BOB_WALLET_ID">
+            <stringProp name="cacheKey">bob-wallet</stringProp>
+            <stringProp name="ScriptLanguage">groovy</stringProp>
+            <stringProp name="Script">
+import groovy.json.JsonSlurper
+if (prev.isSuccessful() &amp;&amp; prev.getResponseDataAsString()) {
+    def j = new JsonSlurper().parseText(prev.getResponseDataAsString())
+    if (j?.id) props.put(&quot;BOB_WALLET_ID&quot;, j.id as String)
+}
+</stringProp>
+          </JSR223PostProcessor><hashTree/>
+        </hashTree>
+
+        <!-- 1.9 Seeds iniciales Alice / Bob = seedAmount vía UPDATE SQL directo (sin endpoint admin top-up).
+               JDBC Request requiere el plugin bzm - JDBC o postgresql jar en lib/.
+               Alternativa: descomentar para ejecución con driver Postgres en JMETER_HOME/lib. -->
+        <JDBCConnectionConfiguration guiclass="DbConnectionGui" testclass="JDBCConnectionConfiguration" testname="JDBC Config micropay" enabled="false">
+          <stringProp name="dataSource">micropay-local</stringProp>
+          <stringProp name="dbUrl">jdbc:postgresql://localhost:5432/micropay</stringProp>
+          <stringProp name="driver">org.postgresql.Driver</stringProp>
+          <stringProp name="username">app_user</stringProp>
+          <stringProp name="password">changeme_local_only</stringProp>
+        </JDBCConnectionConfiguration>
+        <hashTree/>
+        <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="Seeds SQL directo Alice/Bob" enabled="false">
+          <stringProp name="dataSource">micropay-local</stringProp>
+          <stringProp name="query">
+UPDATE wallets SET balance = ${__P(seedAmount,1000000)}, reserved = 0, updated_at = NOW()
+WHERE id IN ('${__P(ALICE_WALLET_ID,)}', '${__P(BOB_WALLET_ID,)}');
+          </stringProp>
+          <stringProp name="queryArguments"></stringProp>
+          <stringProp name="queryArgumentsValues"></stringProp>
+          <stringProp name="queryTypes"></stringProp>
+        </JDBCSampler>
+        <hashTree/>
+
+      </hashTree>
+
+      <!-- ============================================================
+           THREAD GROUP PRINCIPAL: 1000 usuarios concurrentes
+           Cada hilo: Loop N veces, alterna transfer A→B y B→A.
+           Alternativa de 2 sub grupos (500 hilos cada dirección) descomentando abajo.
+           ============================================================ -->
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="TG A↔B P2P transfers" enabled="true">
+        <stringProp name="ThreadGroup.num_threads">${__intSum(${threads},0)}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${__intSum(${rampup},0)}</stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <boolProp name="ThreadGroup.delayedStart">true</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">${__intSum(${loops},0)}</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+
+        <!-- Dir A→B (50% hilos) o B→A según threadNum % 2 == 0/1 -->
+        <JSR223PreProcessor guiclass="TestBeanGUI" testclass="JSR223PreProcessor" testname="Asignar dirección alterna por hilo" enabled="true">
+          <stringProp name="cacheKey">dir-allocator</stringProp>
+          <stringProp name="ScriptLanguage">groovy</stringProp>
+          <stringProp name="Script">
+int t = ctx.getThreadNum()
+def even = ((t % 2) == 0)
+if (even) {
+    vars.put(&quot;DIRECTION&quot;, &quot;A2B&quot;)
+    vars.put(&quot;AUTH&quot;, props.get(&quot;ALICE_JWT&quot;) ?: &quot;Bearer NO-JWT&quot;)
+    vars.put(&quot;FROM&quot;, props.get(&quot;ALICE_WALLET_ID&quot;) ?: &quot;NO-WALLET&quot;)
+    vars.put(&quot;TO&quot;,   props.get(&quot;BOB_WALLET_ID&quot;)   ?: &quot;NO-WALLET&quot;)
+} else {
+    vars.put(&quot;DIRECTION&quot;, &quot;B2A&quot;)
+    vars.put(&quot;AUTH&quot;, props.get(&quot;BOB_JWT&quot;) ?: &quot;Bearer NO-JWT&quot;)
+    vars.put(&quot;FROM&quot;, props.get(&quot;BOB_WALLET_ID&quot;)   ?: &quot;NO-WALLET&quot;)
+    vars.put(&quot;TO&quot;,   props.get(&quot;ALICE_WALLET_ID&quot;) ?: &quot;NO-WALLET&quot;)
+}
+</stringProp>
+        </JSR223PreProcessor>
+        <hashTree/>
+
+        <!-- Transfer A→B o B→A según DIRECTION -->
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="transfer ${DIRECTION}" enabled="true">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{
+  &quot;wallet_from_id&quot;:&quot;${FROM}&quot;,
+  &quot;wallet_to_id&quot;:&quot;${TO}&quot;,
+  &quot;amount&quot;:${__P(transferAmount,1)},
+  &quot;currency&quot;:&quot;USD&quot;,
+  &quot;note&quot;:&quot;JMeter T14 ${DIRECTION} t=${ctx.getThreadNum()} i=${__jm__Loop Controller__idx}&quot;
+}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <stringProp name="HTTPSampler.path">${__V(APIV1Path,)}/transactions/transfer</stringProp>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Bearer por hilo">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="Authorization" elementType="Header">
+                <stringProp name="Header.name">Authorization</stringProp>
+                <stringProp name="Header.value">${AUTH}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <!-- Assert: SUCCESS si 200 o 409 Conflict (Reintento cliente / aceptable)
+               FAIL si 422 (regla negocio) o 5xx o 401/403 -->
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200 ó 409 (conflicto reintentable)" enabled="true">
+            <collectionProp name="Asserter.test_strings">
+              <stringProp name="Asserter.test_string">200</stringProp>
+              <stringProp name="Asserter.test_string">409</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.match_type">12</intProp>
+          </ResponseAssertion>
+          <hashTree/>
+
+          <!-- 422/5xx marcar error (BRV o servidor down) -->
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="NOT 422 / 401 / 403 / 5xx" enabled="true">
+            <collectionProp name="Asserter.test_strings">
+              <stringProp name="Asserter.test_string">422</stringProp>
+              <stringProp name="Asserter.test_string">401</stringProp>
+              <stringProp name="Asserter.test_string">403</stringProp>
+              <stringProp name="Asserter.test_string">^5[0-9][0-9]$</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.not">true</boolProp>
+            <intProp name="Assertion.match_type">4</intProp>
+          </ResponseAssertion>
+          <hashTree/>
+
+          <!-- JSON body debe tener status COMPLETED (caso 200) o error_code en 409/422.
+               Esta assertion solo se evalúa cuando hubo respuesta. -->
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="JSON body shape" enabled="true">
+            <stringProp name="cacheKey">shape-assert</stringProp>
+            <stringProp name="ScriptLanguage">groovy</stringProp>
+            <stringProp name="script">
+import groovy.json.JsonSlurper
+String raw = prev.getResponseDataAsString()
+if (!raw) return
+try {
+    def j = new JsonSlurper().parseText(raw)
+    String code = prev.getResponseCode()
+    if (code == &quot;200&quot;) {
+        if (!j?.status || !j.id || !j.type) {
+            AssertionResult.setFailure(true)
+            AssertionResult.setFailureMessage(&quot;200 response must include status, id, type; got: &quot; + raw.take(200))
+        } else if (j.status != &quot;COMPLETED&quot;) {
+            AssertionResult.setFailure(true)
+            AssertionResult.setFailureMessage(&quot;200 response status != COMPLETED: got=&quot; + j.status)
+        }
+    } else if (code == &quot;409&quot;) {
+        if (!j?.error_code || j.error_code.empty) {
+            AssertionResult.setFailure(true)
+            AssertionResult.setFailureMessage(&quot;409 should include error_code; got: &quot; + raw.take(200))
+        }
+    }
+} catch (Exception ex) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage(&quot;Non-JSON or malformed body: &quot; + ex.message + &quot; - payload=&quot; + raw.take(200))
+}
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+
+        <!-- Rate limit 1 req/s máximo no activado; espec T12 ≥ 120 tps global.
+             Añade ConstantTimer si deseas limitar por hilo. -->
+      </hashTree>
+
+      <!-- ============================================================
+           LISTENERS: throughput + p95 + p99 + errors
+           ============================================================ -->
+      <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="Summary Report" enabled="true">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>false</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename"></stringProp>
+      </ResultCollector>
+      <hashTree/>
+
+      <ResultCollector guiclass="StatGraphVisualizer" testclass="ResultCollector" testname="Aggregate Report (p95/p99)" enabled="true">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>false</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename">backend/performance/results/aggregate.jtl</stringProp>
+      </ResultCollector>
+      <hashTree/>
+
+      <BackendListener guiclass="BackendListenerGui" testclass="BackendListener" testname="Backend Listener (InfluxDb opcional)" enabled="false">
+        <elementProp name="arguments" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments">
+          <collectionProp name="Arguments.arguments">
+            <elementProp name="influxdbMetricsSender" elementType="Argument">
+              <stringProp name="Argument.name">influxdbMetricsSender</stringProp>
+              <stringProp name="Argument.value">org.apache.jmeter.visualizers.backend.influxdb.InfluxdbMetricsSender</stringProp>
+              <stringProp name="Argument.metadata">=</stringProp>
+            </elementProp>
+            <elementProp name="influxdbUrl" elementType="Argument">
+              <stringProp name="Argument.name">influxdbUrl</stringProp>
+              <stringProp name="Argument.value">http://localhost:8086/write?db=jmeter</stringProp>
+              <stringProp name="Argument.metadata">=</stringProp>
+            </elementProp>
+            <elementProp name="application" elementType="Argument">
+              <stringProp name="Argument.name">application</stringProp>
+              <stringProp name="Argument.value">micropay-t14</stringProp>
+              <stringProp name="Argument.metadata">=</stringProp>
+            </elementProp>
+            <elementProp name="measurement" elementType="Argument">
+              <stringProp name="Argument.name">measurement</stringProp>
+              <stringProp name="Argument.value">jmeter</stringProp>
+              <stringProp name="Argument.metadata">=</stringProp>
+            </elementProp>
+          </collectionProp>
+        </elementProp>
+        <stringProp name="classname">org.apache.jmeter.visualizers.backend.influxdb.InfluxdbBackendListenerClient</stringProp>
+        <stringProp name="queueSize"></stringProp>
+      </BackendListener>
+      <hashTree/>
+
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>

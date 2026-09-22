@@ -266,10 +266,11 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
 - [x] 9. Checkpoint - Verificar integración completa
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
 
-- [ ] 10. Crear tests de integración con Testcontainers
-  - [ ] 10.1 Configurar Testcontainers
+- [ ] 10. Crear tests de integración (T11: alternativa A aprobada)
+  - [x] 10.1 Configurar infraestructura de integración
     - Agregar dependencias de Testcontainers para PostgreSQL y Redis
-    - Crear clase base de test con containers
+    - Alternativa A: reutilizar PostgreSQL 16 y Redis 7.2 de Docker Compose, sin iniciar Testcontainers.
+    - Base exclusiva `micropay_test`, Redis DB 15; limpieza transaccional por caso y guardas de aislamiento.
     - _Requisitos: 7.2_
   
   - [ ]* 10.2 Escribir tests de integración end-to-end
@@ -280,6 +281,23 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - **Property 11: Aislamiento en concurrencia**
     - **Property 12: Durabilidad después de commit**
     - **Valida: Requisitos 3.2, 3.4, 7.2**
+
+  - Registro de desbloqueo temporal (2026-09-22, autorizado por el usuario):
+    - **Pruebas excluidas: ninguna.** Surefire ejecuta las 35 propiedades `*Property.java`; Failsafe mantiene todos los `*IT.java`.
+    - Única excepción: perfil Maven opt-in `local-progress`, que omite solo `jacoco:check`. Se mantienen instrumentación, informe y fallo del build ante cualquier prueba fallida. Sin ese perfil siguen vigentes 80% instrucciones y 70% ramas.
+    - Comando de avance: `mvn -f backend/pom.xml clean verify -Pintegration,local-progress`.
+    - Resultado verificado: `BUILD SUCCESS` en 17,661 s; 35 propiedades + 10 casos de integración, cero fallos/errores/omitidos. `check-boundaries.sh`: cero infracciones; dominio sin imports Spring/JPA.
+    - Segunda ejecución con `mvn -f backend/pom.xml verify -Pintegration`: las 45 pruebas pasan nuevamente; falla exclusivamente JaCoCo por cobertura de instrucciones 69,81% y ramas 43,99%. Informe: `backend/target/site/jacoco/index.html`.
+    - Preparación inicial, con Compose activo: `docker exec micropay-postgres createdb -U app_user -O app_user micropay_test` (solo si no existe).
+    - Extensiones de la base aislada: `docker exec micropay-postgres psql -U app_user -d micropay_test -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS citext;'`.
+    - No se modifica V1 ya publicada, no se ejecuta Flyway clean y no se limpia `micropay` ni Redis DB 0.
+    - Core validado por pruebas: registro/login JWT, creación/consulta de wallets, transferencia e historial HTTP, partida doble, conservación de saldos, rechazo de usuario no propietario/saldo insuficiente/wallet congelada, conflicto 409 con tres intentos y liberación de locks.
+    - Rollback reforzado: fallo real de PostgreSQL al persistir una transferencia después de guardar wallets; balances y ledger deben permanecer intactos. Las notificaciones de éxito se emiten solo después del commit.
+    - [ ] Reprogramar cobertura antes de habilitar CI/CD (T28): añadir casos en las áreas no cubiertas hasta superar 80%/70%, verificar sin `local-progress` y eliminar el perfil temporal. No utilizar esta excepción como aprobación de producción.
+    - [ ] Reprogramar Testcontainers al actualizar la combinación Docker Desktop/cliente; mantener la suite Compose como alternativa mientras tanto.
+    - [ ] Completar Property 11 con carga concurrente real en T12. La prueba actual de contención Redis no sustituye el ensayo de 1000 concurrentes.
+    - [ ] Revisar en T12 propiedad del lock tras vencer TTL y comportamiento del fallback local cuando Redis no está disponible; no están cubiertos por esta validación.
+    - T11 permanece con cierre parcial hasta completar aislamiento bajo carga; no se declara cobertura global ni validación de todos los módulos del producto.
 
 - [x] 11. Configurar containerización
   - [x] 11.1 Crear Dockerfile
@@ -328,11 +346,24 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - Asegurar que los logs/eventos no incluyan datos sensibles
     - _Requisitos: 15.1, 15.2, 15.3, 16.3_
 
-- [ ]* 14. Crear tests de carga con JMeter
-  - Crear plan de test con 1000 transacciones concurrentes
-  - Verificar que no hay condiciones de carrera
-  - Validar que ACID se mantiene bajo carga
-  - Medir latencia p95 y p99
+- [x]* 14. Crear tests de carga con JMeter
+  - [x]* 14.1 Plan de test 1000 hilos concurrentes A↔B 1 USD.
+    - Archivo: `backend/performance/transfer-p2p-1000-concurrent.jmx`.
+    - SetupThreadGroup prepara 2 usuarios JMeter (Alice/Bob), registra, activa email, login JWT, crea wallet USD.
+    - ThreadGroup 1000 hilos, ramp-up 60s, Loop 10, direcciones A→B/B→A alternas por hilo (threadNum % 2).
+    - Configuración parametrizada: `-Jthreads=1000 -Jrampup=60 -Jloops=10 -JseedAmount=1000000 -JtransferAmount=1 -Jhost=localhost -Jport=8080`.
+    - Seeds iniciales Alice/Bob = seedAmount USD (JMeter JDBC Config deshabilitado; usar SQL directo: `UPDATE wallets SET balance = seed WHERE id IN (aId,bId);`).
+  - [x]* 14.2 Assertions HTTP + JSON.
+    - Éxito (200 OK con body.status == COMPLETED y tx.id/tx.type) OR 409 Conflict con error_code (lock distribuido / optimistic locking; Retry-After 2s en response).
+    - Fallo duro (marcado): 422 BRV, 401/403 Auth/Roles, 5xx servidor.
+    - JSR223 assertion valida JSON shape no malformed.
+  - [x]* 14.3 Métricas p95/p99 + throughput.
+    - Listeners: Summary Report + Aggregate Report + BackendListener InfluxDB (optional).
+    - `jtl` output: `backend/performance/results/aggregate.jtl`; dashboard HTML: `backend/performance/results/dashboard`.
+  - [x]* 14.4 Post-validación ACID (0 double spend, balances finales = iniciales).
+    - Script: `backend/performance/sql/post-validate.sql` valida (1) double entry 2 movimientos por tx COMPLETED, (2) neto algebraico 0, (3) ningún balance < 0, (4) wallet.balance == último balanceAfter de ledger, (5) conservación global moneda Alice+Bob suma invariable.
+  - **[ ] Reprogramar ejecución real T14 después de levantar backend `docker compose up backend` y poner 2 seed USD a wallets JMeter. Objetivo spec: throughput ≥ 120 tx/s, 0 doble gasto, 0 balances negativos, suma wallets global = inicial.**
+  - **[ ] Reprogramar en T14: ejecutar con JMeter CLI non-GUI 3 veces, tomar mediana de throughput y percentiles.**
   - _Requisitos: 7.3_
 
 - [ ] 15. Checkpoint final - Verificar sistema completo
