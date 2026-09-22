@@ -27,11 +27,12 @@ import java.util.stream.Collectors;
 /**
  * Exception Handler Global (RFC 7807 Problem Detail JSON).
  * Convierte todas las excepciones Java en respuestas JSON estándar:
- *   { status, error_code, detail, timestamp, trace_id, instance}
+ *   { status, error_code, detail, timestamp, trace_id, instance }
  *
  * HttpStatus mapping:
  *   BusinessRuleViolationException  → 422 UNPROCESSABLE_ENTITY (error_code interno)
  *   WalletLockConflict                 → 409 CONFLICT (WALLET_LOCK_CONFLICT)
+ *   ConcurrencyConflictException       → 409 CONFLICT + Retry-After header
  *   UserNotFoundException          → 404 NOT_FOUND
  *   TransactionNotFoundException   → 404
  *   WalletNotFoundException        → 404
@@ -45,6 +46,7 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final String RETRY_AFTER_SECONDS = "2";
 
     @ExceptionHandler(BusinessRuleViolationException.class)
     public ResponseEntity<ErrorResponse> handleBusinessRule(BusinessRuleViolationException ex,
@@ -54,6 +56,39 @@ public class GlobalExceptionHandler {
         if (code != null && code.contains("LOCK")) status = HttpStatus.CONFLICT;
         if (isAuthError(code)) status = HttpStatus.UNAUTHORIZED;
         return build(status, code, ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(ConcurrencyConflictException.class)
+    public ResponseEntity<ErrorResponse> handleConcurrencyConflict(ConcurrencyConflictException ex,
+                                                                    HttpServletRequest req) {
+        String detail = ("%s Operación: %s. Reintente en %ss o implemente backoff exponencial local.").formatted(
+                ex.getMessage(),
+                ex.operation() != null ? ex.operation() : "N/A",
+                RETRY_AFTER_SECONDS);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.CONFLICT)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .header("Retry-After", RETRY_AFTER_SECONDS)
+                .header("X-Micropay-Attempts", String.valueOf(ex.attempts()))
+                .header("X-Micropay-Operation", ex.operation() != null ? ex.operation() : "");
+        String traceId = UUID.randomUUID().toString();
+        ErrorResponse body = new ErrorResponse(
+                "about:blank",
+                HttpStatus.CONFLICT.getReasonPhrase(),
+                HttpStatus.CONFLICT.value(),
+                detail,
+                req.getRequestURI(),
+                ex.errorCode(),
+                Instant.now(),
+                traceId);
+        log.atWarn()
+                .addKeyValue("error_code", ex.errorCode())
+                .addKeyValue("attempts", ex.attempts())
+                .addKeyValue("operation", ex.operation())
+                .addKeyValue("trace_id", traceId)
+                .log("ConcurrencyConflict path={} attempts={} cause={}",
+                        req.getRequestURI(), ex.attempts(),
+                        ex.getCause() == null ? null : ex.getCause().getClass().getSimpleName() + ": " + ex.getCause().getMessage());
+        return builder.body(body);
     }
 
     @ExceptionHandler(UserNotFoundException.class)

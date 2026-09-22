@@ -86,6 +86,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aop</artifactId>
         </dependency>
+        <!-- Spring Retry: retry deadlock/optimistic/lock failures policy + backoff -->
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+        </dependency>
         <!-- Logback contrib JSON layout + Jackson formatter (JsonLayout y JacksonJsonFormatter en logback-spring.xml) -->
         <dependency>
             <groupId>ch.qos.logback.contrib</groupId>
@@ -216,6 +221,17 @@
             <groupId>net.jqwik</groupId>
             <artifactId>jqwik</artifactId>
             <version>${jqwik.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- junit-platform-launcher: Surefire 3.x descubre engines adicionales (jqwik) sin necesidad de provider registrations manuales -->
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-commons</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- Testcontainers — Postgres + Redis REALES en tests -->

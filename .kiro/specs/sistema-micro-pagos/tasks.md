@@ -30,7 +30,7 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - Implementar método `credit()` para agregar fondos
     - _Requisitos: 1.1, 1.2, 2.1, 2.5_
   
-  - [ ]* 2.3 Escribir property test para Wallet
+  - [x]* 2.3 Escribir property test para Wallet
     - **Property 1: Balance inicial cero**
     - **Property 9: Prevención de balances negativos**
     - **Valida: Requisitos 1.1, 2.5**
@@ -122,7 +122,7 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - Integrar auditoría (registrar intento, éxito y fallo)
     - _Requisitos: 2.1, 2.2, 2.4, 2.5, 2.6, 3.1, 3.3, 4.3, 13.1, 13.2, 13.3, 13.4, 15.1_
   
-  - [ ]* 4.6 Escribir property tests para ProcessTransactionUseCase
+  - [x]* 4.6 Escribir property tests para ProcessTransactionUseCase
     - **Property 5: Validación de fondos suficientes**
     - **Property 6: Conservación de suma total de balances**
     - **Property 8: Atomicidad en fallos**
@@ -137,7 +137,7 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - Implementar consulta por transactionId
     - _Requisitos: 6.4_
   
-  - [ ]* 4.8 Escribir property tests para GetTransactionHistoryUseCase
+  - [x]* 4.8 Escribir property tests para GetTransactionHistoryUseCase
     - **Property 15: Filtrado correcto de transacciones**
     - **Valida: Requisitos 6.4**
 
@@ -162,13 +162,13 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - Definir constraints/índices para idempotencia si se persiste en PostgreSQL
     - _Requisitos: 6.1, 6.2, 6.5, 12.4, 13.2_
   
-  - [ ] 6.2 Implementar PostgresWalletRepository
+  - [x] 6.2 Implementar PostgresWalletRepository
     - Extender JpaRepository
     - Implementar conversión entre Wallet (dominio) y WalletEntity (JPA)
     - Implementar todos los métodos de WalletRepository port
     - _Requisitos: 5.3, 6.1, 6.3_
   
-  - [ ] 6.3 Implementar PostgresTransactionRepository
+  - [x] 6.3 Implementar PostgresTransactionRepository
     - Extender JpaRepository
     - Implementar conversión entre Transaction (dominio) y TransactionEntity (JPA)
     - Implementar queries personalizadas para filtrado por fecha
@@ -178,7 +178,7 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - **Property 16: Integridad referencial**
     - **Valida: Requisitos 6.5**
   
-  - [ ] 6.5 Implementar RedisCacheAdapter
+  - [x] 6.5 Implementar RedisCacheAdapter
     - Configurar RedisTemplate con serialización apropiada
     - Implementar getBalance con manejo de Optional
     - Implementar putBalance con TTL de 5 minutos
@@ -206,14 +206,14 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - Agregar anotaciones de validación (@NotNull, @Positive, etc.)
     - _Requisitos: 10.2, 11.6_
   
-  - [ ] 7.2 Implementar WalletController
+  - [x] 7.2 Implementar WalletController
     - Implementar POST /api/wallets para crear wallet
     - Implementar GET /api/wallets/{id} para consultar wallet
     - Agregar validación de entrada
     - Configurar serialización JSON
     - _Requisitos: 11.1, 11.2, 11.6_
   
-  - [ ] 7.3 Implementar TransactionController
+  - [x] 7.3 Implementar TransactionController
     - Implementar POST /api/transactions para crear transacción
     - Implementar GET /api/transactions/{id} para consultar transacción
     - Implementar GET /api/wallets/{id}/transactions para historial
@@ -226,7 +226,7 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - **Property 21: Formato JSON válido**
     - **Valida: Requisitos 11.6**
   
-  - [ ] 7.5 Implementar GlobalExceptionHandler
+  - [x] 7.5 Implementar GlobalExceptionHandler
     - Mapear InsufficientFundsException a 422 con mensaje descriptivo
     - Mapear WalletNotFoundException a 404
     - Mapear DuplicateWalletException a 409
@@ -244,13 +244,13 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - **Property 20: Códigos HTTP apropiados**
     - **Valida: Requisitos 10.1, 10.2, 10.3, 10.4**
 
-  - [ ] 7.7 Definir contrato de API (esquemas y ejemplos)
+  - [x] 7.7 Definir contrato de API (esquemas y ejemplos)
     - Documentar payloads JSON de requests/responses (wallet, transaction, errors)
     - Definir formato estándar de errores (por ejemplo, Problem Details RFC 7807)
     - Definir paginación y filtros del historial (page/size, start/end date, sort)
     - _Requisitos: 11.4, 11.6, 17.1, 17.2, 17.3_
 
-  - [ ]* 7.8 Implementar seguridad mínima (recomendado para entorno real)
+  - [x] 7.8 Implementar seguridad mínima (recomendado para entorno real)
     - Autenticación (por ejemplo, JWT) y autorización: solo el owner puede iniciar débitos desde su wallet
     - Rate limiting en endpoints sensibles (crear transacción)
     - Validaciones anti-abuso básicas (límites por request/usuario)
@@ -263,7 +263,7 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - Implementar health indicators para PostgreSQL y Redis
     - _Requisitos: 8.4_
 
-- [ ] 9. Checkpoint - Verificar integración completa
+- [x] 9. Checkpoint - Verificar integración completa
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
 
 - [ ] 10. Crear tests de integración con Testcontainers
@@ -282,14 +282,14 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - **Valida: Requisitos 3.2, 3.4, 7.2**
 
 - [x] 11. Configurar containerización
-  - [ ] 11.1 Crear Dockerfile
+  - [x] 11.1 Crear Dockerfile
     - Usar imagen base de Java consistente con el objetivo del proyecto (Java 17 o 21, decidir y unificar)
     - Copiar JAR de la aplicación
     - Exponer puerto 8080
     - Configurar HEALTHCHECK
     - _Requisitos: 8.1, 8.4_
   
-  - [ ] 11.2 Crear docker-compose.yml
+  - [x] 11.2 Crear docker-compose.yml
     - Definir servicio app con variables de entorno
     - Definir servicio PostgreSQL con volumen persistente
     - Definir servicio Redis con volumen persistente
