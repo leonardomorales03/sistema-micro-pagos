@@ -1,15 +1,44 @@
 # =============================================================
-#  application-test.yml — PERFIL TESTS (JUnit + Testcontainers)
+#  application-test.yml — PERFIL TESTS (JUnit + Docker Compose local)
 #  Valores estables y deterministas; sin random
+#  Nota: Alternativa A T11 — containers Docker Compose existentes
+#        postgres :5432 / redis :6379 — credenciales desarrollo local
 # =============================================================
+logging:
+  level:
+    root: WARN
+    com.micropay.backend: INFO
+    org.testcontainers: WARN
+    org.testcontainers.docker: WARN
+  pattern.console: "%d{HH:mm:ss.SSS} [%-5level] %logger{36} - %msg%n"
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.r2dbc.R2dbcAutoConfiguration
   config:
     activate.on-profile: test
+  datasource:
+    url: jdbc:postgresql://localhost:5432/micropay_test
+    username: app_user
+    password: changeme_local_only
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: MicropayHikariTestPool
+      maximum-pool-size: 10
+      minimum-idle: 2
   jpa:
     show-sql: false
     properties.hibernate.generate_statistics: false
   flyway:
     enabled: true
+    clean-disabled: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ""
+      database: 15
+      timeout: 2000ms
   cache:
     type: redis
   mail:
@@ -30,15 +59,6 @@ micropay.stripe:
   secret-key: sk_test_FAKE00000000000000000000000000
   webhook-signing-secret: whsec_FAKE00000000000000000000000000
   connect-client-id: ca_FAKE00000000000000000000000000
-
-# Silenciar logs en tests (performance)
-logging:
-  level:
-    root: WARN
-    com.micropay.backend: INFO
-    org.testcontainers: WARN
-    org.testcontainers.docker: WARN
-  pattern.console: "%d{HH:mm:ss.SSS} [%-5level] %logger{36} - %msg%n"
 
 # Actuator mínimo en tests
 management.endpoints.web.exposure.include: health

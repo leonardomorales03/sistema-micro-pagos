@@ -18,6 +18,11 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -52,6 +57,7 @@ public class TransactionService implements TransactionUseCases {
     private final NotificationAdapter notifications;
     private final UserRepository users;
     private final org.springframework.retry.support.RetryTemplate transferRetryTemplate;
+    private final TransactionTemplate transferTransaction;
 
     public TransactionService(WalletRepository wallets,
                               TransactionRepository transactions,
@@ -60,7 +66,8 @@ public class TransactionService implements TransactionUseCases {
                               NotificationAdapter notifications,
                               UserRepository users,
                               @Qualifier("transferRetryTemplate")
-                              org.springframework.retry.support.RetryTemplate transferRetryTemplate) {
+                              org.springframework.retry.support.RetryTemplate transferRetryTemplate,
+                              PlatformTransactionManager transactionManager) {
         this.wallets = wallets;
         this.transactions = transactions;
         this.walletLock = walletLock;
@@ -68,6 +75,8 @@ public class TransactionService implements TransactionUseCases {
         this.notifications = notifications;
         this.users = users;
         this.transferRetryTemplate = transferRetryTemplate;
+        this.transferTransaction = new TransactionTemplate(transactionManager);
+        this.transferTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Override
@@ -87,8 +96,13 @@ public class TransactionService implements TransactionUseCases {
                         }
                     },
                     ctx -> {
-                        int attempt = 1 + ctx.getRetryCount();
                         Throwable cause = ctx.getLastThrowable();
+                        // Recovery also runs for non-retryable business failures.
+                        if (ctx.getRetryCount() < RetryConfig.MAX_ATTEMPTS
+                                && cause instanceof RuntimeException runtime) {
+                            throw runtime;
+                        }
+                        int attempt = ctx.getRetryCount();
                         log.atError()
                                 .addKeyValue("operation", "transferP2P")
                                 .addKeyValue("attempt", attempt)
@@ -125,7 +139,7 @@ public class TransactionService implements TransactionUseCases {
         // 1. BusinessRuleViolation con código WALLET_LOCK* (Redis SETNX fallo temporal)
         if (unwrapped instanceof BusinessRuleViolationException bre
                 && bre.getCode() != null
-                && bre.getCode().startsWith("WALLET_LOCK")) {
+                && bre.getCode().startsWith("BUSINESS_RULE_VIOLATION_WALLET_LOCK")) {
             return new RetryConfig.TransientConcurrencyException(
                     "Transient wallet lock conflict: " + bre.getCode(), unwrapped);
         }
@@ -169,8 +183,7 @@ public class TransactionService implements TransactionUseCases {
      * el RetryTemplate (en el caller) ejecutará de nuevo este método CON UNA NUEVA TRANSACCIÓN DB.
      * De esta forma el rollback afecta SOLO al intento fallido, y al reintentar tenemos nueva conexión limpia.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public Transaction doTransferP2P(int attempt,
+    private Transaction doTransferP2P(int attempt,
                                      WalletId fromWalletId,
                                      WalletId toWalletId,
                                      Money amount,
@@ -203,100 +216,114 @@ public class TransactionService implements TransactionUseCases {
             first = toWalletId; second = fromWalletId;
         }
         acquireLockOrFail(first, "transferP2P", attempt);
-        acquireLockOrFail(second, "transferP2P", attempt);
+        boolean secondAcquired = false;
         try {
-            Wallet from = wallets.findById(fromWalletId)
-                    .orElseThrow(() -> new WalletNotFoundException(fromWalletId.uuid()));
-            Wallet to = wallets.findById(toWalletId)
-                    .orElseThrow(() -> new WalletNotFoundException(toWalletId.uuid()));
+            acquireLockOrFail(second, "transferP2P", attempt);
+            secondAcquired = true;
+            // A local method call bypasses Spring's transactional proxy.
+            // Keep both locks until this transaction has committed or rolled back.
+            return transferTransaction.execute(status -> {
+                Wallet from = wallets.findById(fromWalletId)
+                        .orElseThrow(() -> new WalletNotFoundException(fromWalletId.uuid()));
+                Wallet to = wallets.findById(toWalletId)
+                        .orElseThrow(() -> new WalletNotFoundException(toWalletId.uuid()));
 
-            if (!from.userId().equals(initiatedBy)) {
-                throw new BusinessRuleViolationException("WALLET_NOT_OWNED_BY_USER",
-                        "Wallet %s no pertenece al usuario %s".formatted(fromWalletId, initiatedBy));
-            }
+                if (!from.userId().equals(initiatedBy)) {
+                    throw new BusinessRuleViolationException("WALLET_NOT_OWNED_BY_USER",
+                            "Wallet %s no pertenece al usuario %s".formatted(fromWalletId, initiatedBy));
+                }
 
-            // Monedas coinciden
-            if (!from.currency().equals(to.currency()) || !from.currency().equals(amount.currency())) {
-                throw new BusinessRuleViolationException("CURRENCY_MISMATCH",
-                        "Transferencia requiere monedas iguales: from=%s, to=%s, amount=%s"
-                                .formatted(from.currency(), to.currency(), amount.currency()));
-            }
+                // Monedas coinciden
+                if (!from.currency().equals(to.currency()) || !from.currency().equals(amount.currency())) {
+                    throw new BusinessRuleViolationException("CURRENCY_MISMATCH",
+                            "Transferencia requiere monedas iguales: from=%s, to=%s, amount=%s"
+                                    .formatted(from.currency(), to.currency(), amount.currency()));
+                }
 
-            // 2. RiskEngine velocity counters (Redis)
-            RiskCheckAdapter.RiskResult rr = riskEngine.checkTransfer(
-                    initiatedBy, fromWalletId, toWalletId, amount, "localhost");
-            if (!rr.allowed()) {
-                throw new BusinessRuleViolationException(
-                        rr.blockedRule() != null ? rr.blockedRule() : "RISK_BLOCKED",
-                        rr.detail());
-            }
+                // 2. RiskEngine velocity counters (Redis)
+                RiskCheckAdapter.RiskResult rr = riskEngine.checkTransfer(
+                        initiatedBy, fromWalletId, toWalletId, amount, "localhost");
+                if (!rr.allowed()) {
+                    throw new BusinessRuleViolationException(
+                            rr.blockedRule() != null ? rr.blockedRule() : "RISK_BLOCKED",
+                            rr.detail());
+                }
 
-            // 3. Debito from + crédito to — aplica 7 reglas negocio en domain Wallet methods
-            Money zeroFee = Money.zero(amount.currency());
-            Money balanceAfterDebit = from.debit(amount, "transferP2P");
-            Money balanceAfterCredit = to.credit(amount, "transferP2P");
+                // 3. Debito from + crédito to — aplica 7 reglas negocio en domain Wallet methods
+                Money zeroFee = Money.zero(amount.currency());
+                Money balanceAfterDebit = from.debit(amount, "transferP2P");
+                Money balanceAfterCredit = to.credit(amount, "transferP2P");
 
-            // 4. Salvar wallets actualizados → optimist lock @Version incrementa o falla si colisión
-            Wallet savedFrom = wallets.save(from);
-            Wallet savedTo = wallets.save(to);
+                // 4. Salvar wallets actualizados → optimist lock @Version incrementa o falla si colisión
+                Wallet savedFrom = wallets.save(from);
+                Wallet savedTo = wallets.save(to);
 
-            Transaction.Builder txBuilder = Transaction.builder()
-                    .type(TransactionType.TRANSFER_P2P)
-                    .walletFromId(fromWalletId)
-                    .walletToId(toWalletId)
-                    .grossAmount(amount)
-                    .netAmount(amount)
-                    .feeAmount(zeroFee)
-                    .status(TransactionStatus.COMPLETED)
-                    .createdBy(initiatedBy.uuid())
-                    .note(note);
+                Transaction.Builder txBuilder = Transaction.builder()
+                        .type(TransactionType.TRANSFER_P2P)
+                        .walletFromId(fromWalletId)
+                        .walletToId(toWalletId)
+                        .grossAmount(amount)
+                        .netAmount(amount)
+                        .feeAmount(zeroFee)
+                        .status(TransactionStatus.COMPLETED)
+                        .createdBy(initiatedBy.uuid())
+                        .note(note);
 
-            if (note != null) txBuilder.note(note);
-            Transaction tx = txBuilder.build();
+                if (note != null) txBuilder.note(note);
+                Transaction tx = txBuilder.build();
 
-            // Ledger Double Entry (2 AccountMoves)
-            List<AccountMove> moves = new ArrayList<>(2);
-            moves.add(new AccountMove(UUID.randomUUID(),
-                    fromWalletId, tx.id(),
-                    Money.of(amount.amount().negate(), amount.currency()),
-                    balanceAfterDebit, Instant.now()));
-            moves.add(new AccountMove(UUID.randomUUID(),
-                    toWalletId, tx.id(),
-                    amount, balanceAfterCredit, Instant.now()));
-            txBuilder.accountMoves(moves);
-            tx = txBuilder.build();
+                // Ledger Double Entry (2 AccountMoves)
+                List<AccountMove> moves = new ArrayList<>(2);
+                moves.add(new AccountMove(UUID.randomUUID(),
+                        fromWalletId, tx.id(),
+                        Money.of(amount.amount().negate(), amount.currency()),
+                        balanceAfterDebit, Instant.now()));
+                moves.add(new AccountMove(UUID.randomUUID(),
+                        toWalletId, tx.id(),
+                        amount, balanceAfterCredit, Instant.now()));
+                txBuilder.accountMoves(moves);
+                tx = txBuilder.build();
 
-            Transaction savedTx = transactions.save(tx);
+                Transaction savedTx = transactions.save(tx);
 
-            // 5. Notificaciones PUSH (stub log) — no-fail
-            trySendNotif(from.userId(), NotificationAdapter.Channel.PUSH,
-                    "TRANSFER_SENT",
-                    java.util.Map.of(
-                            "tx_id", savedTx.id().toString(),
-                            "amount", amount.toString(),
-                            "to_wallet", toWalletId.toString()
-                    ));
-            trySendNotif(to.userId(), NotificationAdapter.Channel.PUSH,
-                    "TRANSFER_RECEIVED",
-                    java.util.Map.of(
-                            "tx_id", savedTx.id().toString(),
-                            "amount", amount.toString(),
-                            "from_wallet", fromWalletId.toString()
-                    ));
+                // Publish success only after the database commit has succeeded.
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        trySendNotif(from.userId(), NotificationAdapter.Channel.PUSH,
+                                "TRANSFER_SENT",
+                                java.util.Map.of(
+                                        "tx_id", savedTx.id().toString(),
+                                        "amount", amount.toString(),
+                                        "to_wallet", toWalletId.toString()
+                                ));
+                        trySendNotif(to.userId(), NotificationAdapter.Channel.PUSH,
+                                "TRANSFER_RECEIVED",
+                                java.util.Map.of(
+                                        "tx_id", savedTx.id().toString(),
+                                        "amount", amount.toString(),
+                                        "from_wallet", fromWalletId.toString()
+                                ));
 
-            log.atInfo()
-                    .addKeyValue("operation", "transferP2P")
-                    .addKeyValue("attempt", attempt)
-                    .addKeyValue("tx_id", String.valueOf(savedTx.id()))
-                    .addKeyValue("tx_short_code", String.valueOf(savedTx.shortCode()))
-                    .addKeyValue("from_wallet_version", savedFrom.version())
-                    .addKeyValue("to_wallet_version", savedTo.version())
-                    .log("✅ TransferP2P COMPLETED tx={} from={} to={} amount={}",
-                            savedTx.id(), fromWalletId, toWalletId, amount);
-            return savedTx;
+                        log.atInfo()
+                                .addKeyValue("operation", "transferP2P")
+                                .addKeyValue("attempt", attempt)
+                                .addKeyValue("tx_id", String.valueOf(savedTx.id()))
+                                .addKeyValue("tx_short_code", String.valueOf(savedTx.shortCode()))
+                                .addKeyValue("from_wallet_version", savedFrom.version())
+                                .addKeyValue("to_wallet_version", savedTo.version())
+                                .log("✅ TransferP2P COMPLETED tx={} from={} to={} amount={}",
+                                        savedTx.id(), fromWalletId, toWalletId, amount);
+
+                    }
+                });
+                return savedTx;
+            });
         } finally {
+            if (secondAcquired) {
+                walletLock.unlock(second);
+            }
             walletLock.unlock(first);
-            walletLock.unlock(second);
         }
     }
 

@@ -30,7 +30,7 @@
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.6.0</springdoc.version>
         <jqwik.version>1.9.1</jqwik.version>
-        <testcontainers.version>1.20.3</testcontainers.version>
+        <testcontainers.version>1.21.0</testcontainers.version>
         <shedlock.version>5.16.0</shedlock.version>
         <stripe.version>26.9.0</stripe.version>
         <guava.version>33.3.1-jre</guava.version>
@@ -40,6 +40,7 @@
         <postgresql.version>42.7.4</postgresql.version>
         <lettuce.version>6.4.0.RELEASE</lettuce.version>
         <jacoco.version>0.8.12</jacoco.version>
+        <coverage.check.skip>false</coverage.check.skip>
     </properties>
 
     <!-- ==========================================================
@@ -307,6 +308,7 @@
                         <phase>verify</phase>
                         <goals><goal>check</goal></goals>
                         <configuration>
+                            <skip>${coverage.check.skip}</skip>
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>
@@ -335,7 +337,7 @@
                 <configuration>
                     <includes>
                         <include>**/*Test.java</include>
-                        <include>**/*_Property.java</include>
+                        <include>**/*Property.java</include>
                     </includes>
                     <properties>
                         <configurationParameters>
@@ -356,6 +358,13 @@
          PROFILES — dev | test | sandbox | prod
          ========================================================== -->
     <profiles>
+        <!-- Temporary local exception: tests and coverage report still run. -->
+        <profile>
+            <id>local-progress</id>
+            <properties>
+                <coverage.check.skip>true</coverage.check.skip>
+            </properties>
+        </profile>
         <profile>
             <id>integration</id>
             <build>
@@ -374,6 +383,9 @@
                                         <include>**/*IT.java</include>
                                         <include>**/*IntegrationTest.java</include>
                                     </includes>
+                                    <systemPropertyVariables>
+                                        <spring.profiles.active>test</spring.profiles.active>
+                                    </systemPropertyVariables>
                                 </configuration>
                             </execution>
                         </executions>

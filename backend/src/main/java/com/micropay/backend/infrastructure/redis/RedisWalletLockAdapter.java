@@ -36,10 +36,9 @@ public class RedisWalletLockAdapter implements WalletLockAdapter {
     public boolean tryLock(WalletId walletId) {
         String key = KEY_PREFIX + walletId.uuid();
         Boolean acquired = redisTryLock(key);
-        if (acquired != null && acquired) {
-            return true;
+        if (acquired != null) {
+            return acquired;
         }
-        // Fallback in-memory (dev-local mode)
         long now = System.currentTimeMillis();
         Long existing = memoryFallback.putIfAbsent(key, now + TTL_SECONDS * 1000L);
         if (existing == null) return true;
