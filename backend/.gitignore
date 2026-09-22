@@ -80,3 +80,8 @@ infra/redis/data/
 #  DOCKERIGNORE (se mantiene, no regla git)
 # ──────────────────────────────────────────────────────────────
 # (.dockerignore se versiona, NO ignorar)
+
+# ──────────────────────────────────────────────────────────────
+#  JQWIK PBT — base de datos interna de seeds para reproducción
+# ──────────────────────────────────────────────────────────────
+.jqwik-database
