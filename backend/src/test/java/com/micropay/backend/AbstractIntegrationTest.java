@@ -41,7 +41,8 @@ public abstract class AbstractIntegrationTest {
         }
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> testJdbc.execute("""
                 TRUNCATE account_moves, transactions, payment_requests, notifications,
-                         risk_incidents, sessions, kyc_documents, wallets, users
+                         risk_incidents, sessions, kyc_documents,
+                         user_profiles, tier_limits, wallets, users
                 """));
         flushAllRedis();
     }
