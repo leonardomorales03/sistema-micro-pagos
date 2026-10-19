@@ -62,11 +62,12 @@ public class SecurityConfig {
                         .contentTypeOptions(cto -> {})
                 )
                 .authorizeHttpRequests(ar -> ar
-                        // 1. Auth endpoints públicos (login, refresh, register, system health)
+                        // 1. Auth endpoints públicos (login, refresh, register, verify email, system health)
                         .requestMatchers(
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/users/register",
+                                "/api/v1/users/verify-email",
                                 "/api/v1/users/{id}/verify-email",
                                 "/api/v1/system/health",
                                 "/api/v1/system/healthz",
@@ -75,6 +76,11 @@ public class SecurityConfig {
                                 "/healthz",
                                 "/info",
                                 "/error"
+                        ).permitAll()
+                        // 1b. TopUps Sandbox approve (mock redirect desde proveedor) + Webhooks proveedor pagos
+                        .requestMatchers(
+                                "/api/v1/top-ups/mock-approve/**",
+                                "/api/v1/webhooks/**"
                         ).permitAll()
                         // 2. Swagger / SpringDoc público
                         .requestMatchers(
