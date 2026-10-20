@@ -259,3 +259,16 @@ micropay.fees:
     mdr-percentage: 0
   subscription:
     percentage: 0
+
+# =============================================================
+#  SUBSCRIPTIONS — Facturación recurrente (Requisito 22)
+#  El scheduler corre cada hora (cron 6 campos: seg min hora ...).
+#  Dunning: tras cada fallo se reintenta +1, +3 y +7 días;
+#  agotados los reintentos la suscripción pasa a CANCELED.
+# =============================================================
+micropay.subscriptions:
+  billing:
+    cron: "0 5 * * * *"
+    batch-size: 100
+  dunning:
+    retry-days: 1,3,7

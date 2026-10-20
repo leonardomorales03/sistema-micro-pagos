@@ -503,16 +503,16 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - ⚠️ **Seguridad**: `GET /api/v1/public/payment-requests/{shortCode}` permitAll; `POST /api/v1/public/payment-requests/{id}/pay` requiere JWT Bearer.
     - ⚠️ Link corto configurable: `app.payment-request.base-url` (default `http://localhost:5173/pay/`).
 
-- [ ] 20. Plans, Subscriptions y Billing Scheduler
-  - [ ] 20.1 Dominio: `Plan`, `Subscription` + ports
+- [x] 20. Plans, Subscriptions y Billing Scheduler
+  - [x] 20.1 Dominio: `Plan`, `Subscription` + ports
     - `BillingInterval` enum; `SubscriptionStatus` con TRIALING/ACTIVE/PAST_DUE/CANCELED/PAUSED
     - `PlanRepository`, `SubscriptionRepository` (findDueForBilling)
     - _Requisitos: 22.1, 22.2, 22.6_
-  - [ ] 20.2 Casos de uso CreatePlan/Subscribe + manage
+  - [x] 20.2 Casos de uso CreatePlan/Subscribe + manage
     - CreatePlanUseCase (MERCHANT), SubscribeToPlanUseCase (subscriber aprueba mandato)
     - CancelSubscriptionUseCase (no pro-rata por defecto), Pause/Resume
     - _Requisitos: 22.1, 22.2, 22.6_
-  - [ ] 20.3 RunSubscriptionBillingJobUseCase + ShedLock + dunning policy
+  - [x] 20.3 RunSubscriptionBillingJobUseCase + ShedLock + dunning policy
     - Scheduler cada 1h: busca next_billing_date ≤ now; por cada subscription → cobrar wallet o retry dunning
     - dunning policy configurable: reintentos día +1, +3, +7; superado → PAST_DUE/CANCELED
     - si billing ok: crear tx tipo SUBSCRIPTION, avanzar next_billing_date, notificar
@@ -520,6 +520,18 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
   - [ ]* 20.4 Property tests: nextBillingDate advance + idempotencia
     - **Property 27: Next billing en futuro tras éxito**
     - _Valida: Requisitos 22.4_
+  - ⚠️ **Notas T20 build 2026-10-20:**
+    - ✅ Build: `mvn -f backend/pom.xml verify -Pintegration,local-progress -DskipITs=true` BUILD SUCCESS (35 PBT green).
+    - ✅ Boundaries: `scripts/check-boundaries.sh` exit 0, 0 infracciones hexágono.
+    - ✅ Migración **`V7__plans_subscriptions.sql`**: tablas `plans` + `subscriptions` (índice `idx_subs_next_billing` para el job). Columna `billing_interval` (no `interval`, palabra reservada SQL).
+    - ⚠️ **Cobro**: reutiliza `TransactionService.transferP2P(..., FeeOperation.SUBSCRIPTION)` → locks Redis ordenados + Spring Retry + ledger doble entrada + comisión FeeEngine.
+    - ⚠️ **Aislamiento del lote**: cada suscripción se cobra en `REQUIRES_NEW` (TransactionTemplate) → el fallo de una no revierte el ciclo completo.
+    - ⚠️ **Dunning**: `micropay.subscriptions.dunning.retry-days=1,3,7`; agotados los reintentos → CANCELED (terminal). Configurable.
+    - ⚠️ **Scheduler**: `@Scheduled(cron = micropay.subscriptions.billing.cron)` = cada hora (min 5) + `@SchedulerLock` (ShedLock sobre Redis) → sólo una instancia ejecuta el job.
+    - ⚠️ **Trial**: `trial_days>0` → suscripción nace TRIALING con primer cobro al final del trial; sin trial → ACTIVE con primer cobro en `now + interval×count`.
+    - ⚠️ **Endpoints**: `POST/GET /api/v1/merchant/plans`, `POST /{id}/archive|activate`, `GET /{id}/subscribers`, `POST/GET /api/v1/subscriptions`, `POST /{id}/cancel|pause|resume`, `POST /api/v1/subscriptions/billing/run` (ROLE_ADMIN, disparo manual del job).
+    - ⚠️ **Roles**: no existe rol MERCHANT; "comercio" = usuario autenticado que ofrece el plan y acredita su wallet. ADMIN puede disparar el ciclo de facturación.
+    - 📌 20.4 (Property 27 next billing en futuro + idempotencia) diferido a **T28** junto con el resto de PBT pendientes.
 
 - [ ] 21. Refunds + FeeEngine
   - [x] 21.1 FeeEnginePort + adaptador de reglas config (DB/properties)
