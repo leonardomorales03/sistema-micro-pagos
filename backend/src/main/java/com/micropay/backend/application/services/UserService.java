@@ -3,6 +3,7 @@ package com.micropay.backend.application.services;
 import com.micropay.backend.domain.entities.User;
 import com.micropay.backend.domain.entities.UserProfile;
 import com.micropay.backend.domain.exceptions.UserNotFoundException;
+import com.micropay.backend.domain.ports.in.ReferralUseCases;
 import com.micropay.backend.domain.ports.in.UserUseCases;
 import com.micropay.backend.domain.ports.out.KycProviderPort;
 import com.micropay.backend.domain.ports.out.NotificationAdapter;
@@ -14,6 +15,8 @@ import com.micropay.backend.domain.valueobjects.Email;
 import com.micropay.backend.domain.valueobjects.KycLevel;
 import com.micropay.backend.domain.valueobjects.UserId;
 import com.micropay.backend.infrastructure.security.VerifiableTokenService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +29,8 @@ import java.util.Optional;
 @Transactional(readOnly = true)
 public class UserService implements UserUseCases {
 
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+
     private final UserRepository users;
     private final UserProfileRepository profiles;
     private final NotificationAdapter notifications;
@@ -33,6 +38,7 @@ public class UserService implements UserUseCases {
     private final VerifiableTokenService tokens;
     private final KycProviderPort kyc;
     private final TierLimitsPort tierLimits;
+    private final ReferralUseCases referralUseCases;
 
     public UserService(UserRepository users,
                        UserProfileRepository profiles,
@@ -40,7 +46,8 @@ public class UserService implements UserUseCases {
                        PasswordEncoder passwordEncoder,
                        VerifiableTokenService tokens,
                        KycProviderPort kyc,
-                       TierLimitsPort tierLimits) {
+                       TierLimitsPort tierLimits,
+                       ReferralUseCases referralUseCases) {
         this.users = users;
         this.profiles = profiles;
         this.notifications = notifications;
@@ -48,6 +55,7 @@ public class UserService implements UserUseCases {
         this.tokens = tokens;
         this.kyc = kyc;
         this.tierLimits = tierLimits;
+        this.referralUseCases = referralUseCases;
     }
 
     @Override
@@ -71,6 +79,16 @@ public class UserService implements UserUseCases {
         User saved = users.save(created);
         UserProfile p = new UserProfile(saved.id());
         profiles.save(p);
+
+        // T27: atribución de referido (idempotente, tolerante a fallos — nunca rompe el signup).
+        if (saved.referredBy() != null) {
+            try {
+                referralUseCases.linkOnSignup(saved.referredBy().uuid(), saved.id().uuid());
+            } catch (Exception e) {
+                log.warn("[REFERRAL] No se pudo registrar la atribución de referido para user {}: {}",
+                        saved.id(), e.getMessage());
+            }
+        }
 
         String verifyToken = tokens.issueToken(VerifiableTokenService.Purpose.VERIFY_EMAIL,
                 saved.id(), 10L * 60L * 1000L);

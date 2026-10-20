@@ -53,7 +53,8 @@ public class RefundController {
             @ApiResponse(responseCode = "403", description = "No autorizado (no es receptor ni admin)"),
             @ApiResponse(responseCode = "404", description = "Transacción origen no encontrada"),
             @ApiResponse(responseCode = "409", description = "Conflicto de concurrencia, reintente"),
-            @ApiResponse(responseCode = "422", description = "Tipo/estado no reembolsable, excede restante o saldo insuficiente")
+            @ApiResponse(responseCode = "422", description = "Tipo/estado no reembolsable, excede restante o saldo insuficiente"),
+            @ApiResponse(responseCode = "428", description = "Challenge de riesgo requerido (step-up)")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -61,11 +62,12 @@ public class RefundController {
     public ResponseEntity<RefundDtos.RefundResponse> create(
             @PathVariable UUID txId,
             @Valid @RequestBody RefundDtos.CreateRefundRequest req,
-            @Parameter(hidden = true) @CurrentUser UserId currentUser) {
+            @Parameter(hidden = true) @CurrentUser UserId currentUser,
+            @RequestHeader(value = "X-Risk-Challenge", required = false) String challengeToken) {
         Currency cur = Currency.valueOf(req.currency().toUpperCase());
         Money amount = Money.of(req.refundedAmount() == null ? BigDecimal.ZERO : req.refundedAmount(), cur);
         RefundService.RefundResult result = refunds.createRefund(
-                currentUser, TransactionId.from(txId), amount, req.reason());
+                currentUser, TransactionId.from(txId), amount, req.reason(), challengeToken);
         return ResponseEntity.status(201).body(toResp(result.refund()));
     }
 

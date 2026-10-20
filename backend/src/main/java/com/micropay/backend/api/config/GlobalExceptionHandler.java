@@ -106,6 +106,18 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "TRANSACTION_NOT_FOUND", ex.getMessage(), req);
     }
 
+    @ExceptionHandler(ReportExportNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleReportExportNotFound(ReportExportNotFoundException ex,
+                                                                    HttpServletRequest req) {
+        return build(HttpStatus.NOT_FOUND, ex.getCode(), ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(ReconciliationMismatchNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleMismatchNotFound(ReconciliationMismatchNotFoundException ex,
+                                                                HttpServletRequest req) {
+        return build(HttpStatus.NOT_FOUND, ex.getCode(), ex.getMessage(), req);
+    }
+
     @ExceptionHandler(InvalidValueObjectException.class)
     public ResponseEntity<ErrorResponse> handleInvalidVO(InvalidValueObjectException ex, HttpServletRequest req) {
         return build(HttpStatus.BAD_REQUEST, "INVALID_VALUE_OBJECT", ex.getMessage(), req);
@@ -140,6 +152,36 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex, HttpServletRequest req) {
         return build(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Credenciales inválidas", req);
+    }
+
+    /**
+     * Step-up de riesgo (T23 / Requisito 27.3/27.4): paso adicional requerido → 428 PRECONDITION_REQUIRED.
+     * Expone el token y método del challenge en cabeceras para que el cliente pueda verificarlo y reintentar.
+     */
+    @ExceptionHandler(RiskChallengeRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleRiskChallenge(RiskChallengeRequiredException ex,
+                                                             HttpServletRequest req) {
+        HttpStatus status = HttpStatus.PRECONDITION_REQUIRED;
+        String traceId = UUID.randomUUID().toString();
+        ErrorResponse body = new ErrorResponse(
+                "about:blank",
+                status.getReasonPhrase(),
+                status.value(),
+                ex.getMessage(),
+                req.getRequestURI(),
+                "RISK_CHALLENGE_REQUIRED",
+                Instant.now(),
+                traceId);
+        log.atInfo()
+                .addKeyValue("error_code", "RISK_CHALLENGE_REQUIRED")
+                .addKeyValue("trace_id", traceId)
+                .log("RiskChallengeRequired path={} method={} reasons={}",
+                        req.getRequestURI(), ex.challengeMethod(), ex.reasons());
+        return ResponseEntity.status(status)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .header("X-Risk-Challenge-Token", ex.challengeToken())
+                .header("X-Risk-Challenge-Method", ex.challengeMethod())
+                .body(body);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

@@ -6,6 +6,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -66,9 +68,14 @@ public class TransactionJpa {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** Metadatos JSONB de la tx (p. ej. rate FX). NULL para tx previas a V12. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "metadata", columnDefinition = "jsonb")
+    private String metadata;
+
     public enum TxType {
         TRANSFER_P2P, DEPOSIT_TOPUP, WITHDRAW, PAYMENT_REQUEST,
-        SUBSCRIPTION_CHARGE, REFUND, REFERRAL_REWARD, FEE_ADJUSTMENT, FX_CONVERSION
+        SUBSCRIPTION_CHARGE, REFUND, REFERRAL_REWARD, FEE_ADJUSTMENT, FX_CONVERSION, ADJUSTMENT
     }
 
     public enum TxStatus {
@@ -124,4 +131,7 @@ public class TransactionJpa {
 
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getMetadata() { return metadata; }
+    public void setMetadata(String metadata) { this.metadata = metadata; }
 }

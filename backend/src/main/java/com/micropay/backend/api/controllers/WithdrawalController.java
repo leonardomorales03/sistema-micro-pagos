@@ -42,19 +42,21 @@ public class WithdrawalController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Retiro creado (PROCESSING)."),
             @ApiResponse(responseCode = "400", description = "Datos inválidos, KYC insuficiente o destino no verificado."),
-            @ApiResponse(responseCode = "404", description = "Wallet/destino/usuario no existe.")
+            @ApiResponse(responseCode = "404", description = "Wallet/destino/usuario no existe."),
+            @ApiResponse(responseCode = "428", description = "Challenge de riesgo requerido (step-up)")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<WithdrawalDtos.WithdrawalResponse> create(
             @Valid @RequestBody WithdrawalDtos.CreateWithdrawalRequest req,
-            @Parameter(hidden = true) @CurrentUser UserId currentUser) {
+            @Parameter(hidden = true) @CurrentUser UserId currentUser,
+            @RequestHeader(value = "X-Risk-Challenge", required = false) String challengeToken) {
         Currency cur = Currency.valueOf(req.currency().toUpperCase());
         Money m = Money.of(req.amount() == null ? BigDecimal.ZERO : req.amount(), cur);
         Withdrawal w = withdrawals.requestWithdrawal(currentUser,
                 WalletId.from(req.walletId()),
                 PayoutDestinationId.from(req.payoutDestinationId()),
-                m, req.idempotencyKey());
+                m, req.idempotencyKey(), challengeToken);
         return ResponseEntity.status(201).body(toResp(w));
     }
 

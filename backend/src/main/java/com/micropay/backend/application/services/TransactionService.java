@@ -2,11 +2,14 @@ package com.micropay.backend.application.services;
 
 import com.micropay.backend.domain.entities.AccountMove;
 import com.micropay.backend.domain.entities.Transaction;
+import com.micropay.backend.domain.entities.User;
+import com.micropay.backend.domain.entities.UserProfile;
 import com.micropay.backend.domain.entities.Wallet;
 import com.micropay.backend.domain.exceptions.BusinessRuleViolationException;
 import com.micropay.backend.domain.exceptions.ConcurrencyConflictException;
 import com.micropay.backend.domain.exceptions.TransactionNotFoundException;
 import com.micropay.backend.domain.exceptions.WalletNotFoundException;
+import com.micropay.backend.domain.ports.in.RiskUseCases;
 import com.micropay.backend.domain.ports.in.TransactionUseCases;
 import com.micropay.backend.domain.ports.out.*;
 import com.micropay.backend.domain.valueobjects.*;
@@ -53,9 +56,10 @@ public class TransactionService implements TransactionUseCases {
     private final WalletRepository wallets;
     private final TransactionRepository transactions;
     private final WalletLockAdapter walletLock;
-    private final RiskCheckAdapter riskEngine;
+    private final RiskUseCases riskService;
     private final NotificationAdapter notifications;
     private final UserRepository users;
+    private final UserProfileRepository profiles;
     private final FeeService feeService;
     private final org.springframework.retry.support.RetryTemplate transferRetryTemplate;
     private final TransactionTemplate transferTransaction;
@@ -63,9 +67,10 @@ public class TransactionService implements TransactionUseCases {
     public TransactionService(WalletRepository wallets,
                               TransactionRepository transactions,
                               WalletLockAdapter walletLock,
-                              RiskCheckAdapter riskEngine,
+                              RiskUseCases riskService,
                               NotificationAdapter notifications,
                               UserRepository users,
+                              UserProfileRepository profiles,
                               FeeService feeService,
                               @Qualifier("transferRetryTemplate")
                               org.springframework.retry.support.RetryTemplate transferRetryTemplate,
@@ -73,9 +78,10 @@ public class TransactionService implements TransactionUseCases {
         this.wallets = wallets;
         this.transactions = transactions;
         this.walletLock = walletLock;
-        this.riskEngine = riskEngine;
+        this.riskService = riskService;
         this.notifications = notifications;
         this.users = users;
+        this.profiles = profiles;
         this.feeService = feeService;
         this.transferRetryTemplate = transferRetryTemplate;
         this.transferTransaction = new TransactionTemplate(transactionManager);
@@ -89,7 +95,21 @@ public class TransactionService implements TransactionUseCases {
                                    Money amount,
                                    UserId initiatedBy,
                                    String note) {
-        return transferP2P(fromWalletId, toWalletId, amount, initiatedBy, note, FeeOperation.TRANSFER_P2P);
+        return transferP2P(fromWalletId, toWalletId, amount, initiatedBy, note, FeeOperation.TRANSFER_P2P, null);
+    }
+
+    /**
+     * Igual que {@link #transferP2P} pero acepta un token de challenge de riesgo ya aprobado
+     * (step-up del RiskEngine, T23). Si la operación no requiere challenge, el token es ignorado.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Transaction transferP2P(WalletId fromWalletId,
+                                   WalletId toWalletId,
+                                   Money amount,
+                                   UserId initiatedBy,
+                                   String note,
+                                   String challengeToken) {
+        return transferP2P(fromWalletId, toWalletId, amount, initiatedBy, note, FeeOperation.TRANSFER_P2P, challengeToken);
     }
 
     /**
@@ -103,11 +123,25 @@ public class TransactionService implements TransactionUseCases {
                                    UserId initiatedBy,
                                    String note,
                                    FeeOperation feeOperation) {
+        return transferP2P(fromWalletId, toWalletId, amount, initiatedBy, note, feeOperation, null);
+    }
+
+    /**
+     * Variante completa: operación del FeeEngine + token de challenge de riesgo.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Transaction transferP2P(WalletId fromWalletId,
+                                   WalletId toWalletId,
+                                   Money amount,
+                                   UserId initiatedBy,
+                                   String note,
+                                   FeeOperation feeOperation,
+                                   String challengeToken) {
         try {
             return transferRetryTemplate.execute(
                     ctx -> {
                         try {
-                            return doTransferP2P(1 + ctx.getRetryCount(), fromWalletId, toWalletId, amount, initiatedBy, note, feeOperation);
+                            return doTransferP2P(1 + ctx.getRetryCount(), fromWalletId, toWalletId, amount, initiatedBy, note, feeOperation, challengeToken);
                         } catch (RuntimeException ex) {
                             throw classifyForRetry(ex);
                         }
@@ -206,7 +240,8 @@ public class TransactionService implements TransactionUseCases {
                                      Money amount,
                                      UserId initiatedBy,
                                      String note,
-                                     FeeOperation feeOperation) {
+                                     FeeOperation feeOperation,
+                                     String challengeToken) {
         if (fromWalletId == null) throw new IllegalArgumentException("fromWalletId");
         if (toWalletId == null) throw new IllegalArgumentException("toWalletId");
         if (fromWalletId.equals(toWalletId)) {
@@ -258,14 +293,9 @@ public class TransactionService implements TransactionUseCases {
                                     .formatted(from.currency(), to.currency(), amount.currency()));
                 }
 
-                // 2. RiskEngine velocity counters (Redis)
-                RiskCheckAdapter.RiskResult rr = riskEngine.checkTransfer(
-                        initiatedBy, fromWalletId, toWalletId, amount, "localhost");
-                if (!rr.allowed()) {
-                    throw new BusinessRuleViolationException(
-                            rr.blockedRule() != null ? rr.blockedRule() : "RISK_BLOCKED",
-                            rr.detail());
-                }
+                // 2. RiskEngine (T23 / Requisito 27): evaluar/enforzar ANTES de mover fondos.
+                //    ALLOW → continúa; BLOCK → BusinessRuleViolationException; CHALLENGE → 428.
+                riskService.enforce(riskContext(initiatedBy, RiskOperation.P2P_TRANSFER, amount), challengeToken);
 
                 // 3. FeeEngine (Requisito 30.2): comisión deducida atómicamente. Default 0.
                 FeeContext feeCtx = FeeContext.of(feeOperation, amount);
@@ -400,5 +430,22 @@ public class TransactionService implements TransactionUseCases {
         } catch (Exception e) {
             log.warn("No se pudo enviar notificación {} a user {}: {}", tpl, userId, e.getMessage());
         }
+    }
+
+    /** Construye el contexto de riesgo con kyc/país best-effort (tolerante a datos ausentes). */
+    private RiskContext riskContext(UserId userId, RiskOperation op, Money amount) {
+        KycLevel kyc = KycLevel.LEVEL_0;
+        String country = null;
+        try {
+            kyc = users.findById(userId).map(User::kycLevel).orElse(KycLevel.LEVEL_0);
+        } catch (Exception e) {
+            log.debug("[RISK] kyc no disponible para user {}: {}", userId, e.getMessage());
+        }
+        try {
+            country = profiles.findByUserId(userId).map(UserProfile::addressCountry).orElse(null);
+        } catch (Exception e) {
+            log.debug("[RISK] país no disponible para user {}: {}", userId, e.getMessage());
+        }
+        return new RiskContext(userId, kyc, country, op, amount, null, null);
     }
 }

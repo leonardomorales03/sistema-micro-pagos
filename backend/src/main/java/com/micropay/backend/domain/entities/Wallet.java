@@ -22,7 +22,7 @@ import java.util.UUID;
  */
 public final class Wallet {
 
-    public enum Status { ACTIVE, FROZEN, CLOSED }
+    public enum Status { ACTIVE, FROZEN, CLOSED, UNDER_REVIEW }
 
     private final WalletId id;
     private final UserId userId;
@@ -65,9 +65,15 @@ public final class Wallet {
         return balance.subtract(reserved);
     }
 
-    /** Añade fondos (crédito). BR#02 + BR#03 + BR#05 */
+    /**
+     * Añade fondos (crédito). BR#02 + BR#03 + BR#05.
+     * <p>
+     * Política T24 (freeze de compliance): se PERMITEN créditos entrantes cuando el
+     * wallet está ACTIVE, FROZEN o UNDER_REVIEW — sólo se bloquea si está CLOSED.
+     * Así un wallet congelado sigue recibiendo fondos, pero no puede debitar.
+     */
     public Money credit(Money amount, String operation) {
-        enforceActive(operation);                 // BR#05
+        enforceNotClosed(operation);              // BR#05 (relajada: permite FROZEN/UNDER_REVIEW)
         enforcePositiveAmount(amount, operation); // BR#03
         enforceSameCurrency(amount, operation);   // BR#02
 
@@ -136,11 +142,25 @@ public final class Wallet {
     public void close()   { this.status = Status.CLOSED;  touchUpdatedAt(); }
     public void activate(){ this.status = Status.ACTIVE;  touchUpdatedAt(); }
 
+    /** Marca el wallet como UNDER_REVIEW (freeze de compliance T24): bloquea débitos, permite créditos. */
+    public void markUnderReview() { this.status = Status.UNDER_REVIEW; touchUpdatedAt(); }
+
+    /** Descongela el wallet (equivalente a activate): vuelve a ACTIVE. */
+    public void unfreeze() { this.status = Status.ACTIVE; touchUpdatedAt(); }
+
     // ────────── VALIDACIONES PRIVADAS (7 reglas negocio) ──────────
     private void enforceActive(String operation) {
         if (this.status != Status.ACTIVE) {
             throw new BusinessRuleViolationException("WALLET_NOT_ACTIVE",
                     "%s no permitido sobre wallet en estado %s".formatted(operation, this.status));
+        }
+    }
+
+    /** Bloquea sólo CLOSED; permite operar en ACTIVE/FROZEN/UNDER_REVIEW (créditos entrantes). */
+    private void enforceNotClosed(String operation) {
+        if (this.status == Status.CLOSED) {
+            throw new BusinessRuleViolationException("WALLET_CLOSED",
+                    "%s no permitido sobre wallet CLOSED".formatted(operation));
         }
     }
 

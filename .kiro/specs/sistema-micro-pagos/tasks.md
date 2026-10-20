@@ -574,36 +574,36 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - **Property 32: HMAC signature verification**
     - _Valida: Requisitos 25.4_
 
-- [ ] 23. Risk Engine + Tier Limits enforcement + AntiFraude
-  - [ ] 23.1 RiskEnginePort + adaptador configurable rules.yaml/DB
+- [x] 23. Risk Engine + Tier Limits enforcement + AntiFraude
+  - [x] 23.1 RiskEnginePort + adaptador configurable rules.yaml/DB
     - RiskContext: { userId, tier, country, operation, amount, device, ip, historicalScores }
     - Decision ALLOW / CHALLENGE step-up / BLOCK + reasons[]
     - Default rules: velocity per hour/day, cross-border high risk list, unusual vs history, new device
     - _Requisitos: 27.1, 27.2, 27.5_
-  - [ ] 23.2 Integración RunRiskCheckUseCase en operaciones críticas
+  - [x] 23.2 Integración RunRiskCheckUseCase en operaciones críticas
     - Top-up first, withdrawal large, refund large, P2P > umbral
     - CHALLENGE → endpoint step-up MFA/email + reintento con challenge token
     - BLOCK → 403 genérico + auditoría detallada
     - _Requisitos: 27.3, 27.4, 27.6_
-  - [ ] 23.3 Velocity counters Redis (risk:velocity:* + TTL granular)
+  - [x] 23.3 Velocity counters Redis (risk:velocity:* + TTL granular)
     - Increment atómico Lua script; expiración por ventana de tiempo
     - _Requisitos: 27.2_
 
 - [ ] 24. Admin Backend API + RBAC avanzado + Adjustments + Freeze wallet
-  - [ ] 24.1 Roles y permisos RBAC: SUPPORT, COMPLIANCE, FINANCE, SUPER_ADMIN
+  - [x] 24.1 Roles y permisos RBAC: SUPPORT, COMPLIANCE, FINANCE, SUPER_ADMIN
     - Tablas rol grants; endpoints `/api/v1/admin/**` con `@PreAuthorize`
     - Backoffice requiere MFA obligatorio
     - _Requisitos: 26.1, 26.6_
-  - [ ] 24.2 Admin CRUD APIs
+  - [x] 24.2 Admin CRUD APIs
     - Búsquedas: `/admin/users?search=`, `/admin/wallets/{id}`, `/admin/transactions` avanzado
     - Detalle usuario completo con KYC, wallets, listado tx, destinos, ajustes history, audit trail
     - _Requisitos: 26.2_
-  - [ ] 24.3 AdminAdjustWalletUseCase + AdminFreezeWalletUseCase
+  - [x] 24.3 AdminAdjustWalletUseCase + AdminFreezeWalletUseCase
     - ADJUSTMENT transaction con reason mandatorio; audit events obligatorios
     - Freeze wallet: marca wallet.status UNDER_REVIEW/FROZEN, bloquea débitos pero permite créditos entrantes
     - Unfreeze con reason; rollout de transacción bloqueada previa si aplica
     - _Requisitos: 26.3, 26.4_
-  - [ ] 24.4 KYC Queue review endpoints (COMPLIANCE role)
+  - [x] 24.4 KYC Queue review endpoints (COMPLIANCE role)
     - Listado KYC en UNDER_REVIEW; acción approve/reject + reason obligatoria
     - Preview documentos (URL firmada, no descarga directa sin razón)
     - _Requisitos: 24.4, 24.5, 26.1_
@@ -611,29 +611,29 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - **Property 31: Todo cambio crítico tiene audit event**
     - _Valida: Requisitos 15.1, 26.4, 26.6_
 
-- [ ] 25. Reports, Exports CSV Asíncronos + Reconciliación
-  - [ ] 25.1 ExportReportUseCase jobs asíncronos + storage S3-compat o local
+- [x] 25. Reports, Exports CSV Asíncronos + Reconciliación
+  - [x] 25.1 ExportReportUseCase jobs asíncronos + storage S3-compat o local
     - Job encola, genera CSV grande en background, sube a storage, envía email con link temporal firmado
     - Endpoints: `POST /admin/reports/exports`, `GET /admin/reports/exports`, `GET /download/{token}`
     - Tipos: tx history, topups, withdrawals, per-user annual tax summary
     - _Requisitos: 28.1, 28.4, 28.5_
-  - [ ] 25.2 Dashboard diario cashflow + fees collected endpoints (FINANCE)
+  - [x] 25.2 Dashboard diario cashflow + fees collected endpoints (FINANCE)
     - Total credited by type, debited by type, net, fees segmentadas
     - _Requisitos: 28.2, 30.5_
-  - [ ] 25.3 RunReconciliationJobUseCase diario vs providers
+  - [x] 25.3 RunReconciliationJobUseCase diario vs providers
     - Match internal transactions vs provider CSV/API; generar tabla mismatches
     - Mismatch statuses: NEW, INVESTIGATING, RESOLVED
     - Endpoint `/admin/reconciliation/runs` + resolver UI
     - _Requisitos: 28.3_
 
 - [ ] 26. Multi-moneda + FxRatePort (feature-flagged, opcional para fase D)
-  - [ ]* 26.1 Extender Money Value Object para multi-currency + Currency enum soportado
+  - [x]* 26.1 Extender Money Value Object para multi-currency + Currency enum soportado
     - Scale por moneda (JPY 0, COP 2 internal / 0 display, USD/EUR 2, 4 si es necesario)
     - _Requisitos: 29.1, 29.5_
-  - [ ]* 26.2 FxRatePort adaptador (proveedor externo + fallback + cache Redis TTL corto)
+  - [x]* 26.2 FxRatePort adaptador (proveedor externo + fallback + cache Redis TTL corto)
     - Cross-currency conversion atomica dentro de tx; persist rate used en metadata transaction
     - _Requisitos: 29.2, 29.3, 29.4_
-  - [ ]* 26.3 Actualizar endpoints: soporte currency param en topups, wallets show balance per currency
+  - [x]* 26.3 Actualizar endpoints: soporte currency param en topups, wallets show balance per currency
     - Feature flag `FEATURE_MULTICURRENCY_ENABLED`
     - _Requisitos: 29.6_
   - [ ]* 26.4 Property test FX consistencia
@@ -641,10 +641,10 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - _Valida: Requisitos 29.3, 29.5_
 
 - [ ] 27. Referrals & Rewards (opcional crecimiento *)
-  - [ ]* 27.1 Generación referral code único al signup + referrer attribution via URL
+  - [x]* 27.1 Generación referral code único al signup + referrer attribution via URL
     - Port ReferralRepository; endpoint `/me/referrals` listado estado
     - _Requisitos: 31.1_
-  - [ ]* 27.2 PayReferralBonusUseCase idempotente por regla+pareja
+  - [x]* 27.2 PayReferralBonusUseCase idempotente por regla+pareja
     - Trigger: qualifying action (tier-1 completado + first topup ≥ $X)
     - Transacción REFERRAL_BONUS con rule idempotency key
     - _Requisitos: 31.2, 31.3, 31.4_

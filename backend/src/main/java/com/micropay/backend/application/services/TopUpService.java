@@ -3,13 +3,18 @@ package com.micropay.backend.application.services;
 import com.micropay.backend.domain.entities.AccountMove;
 import com.micropay.backend.domain.entities.TopUp;
 import com.micropay.backend.domain.entities.Transaction;
+import com.micropay.backend.domain.entities.User;
+import com.micropay.backend.domain.entities.UserProfile;
 import com.micropay.backend.domain.entities.Wallet;
 import com.micropay.backend.domain.exceptions.BusinessRuleViolationException;
 import com.micropay.backend.domain.exceptions.WalletNotFoundException;
+import com.micropay.backend.domain.ports.in.RiskUseCases;
 import com.micropay.backend.domain.ports.out.NotificationAdapter;
 import com.micropay.backend.domain.ports.out.PaymentProviderAdapter;
 import com.micropay.backend.domain.ports.out.TopUpRepository;
 import com.micropay.backend.domain.ports.out.TransactionRepository;
+import com.micropay.backend.domain.ports.out.UserProfileRepository;
+import com.micropay.backend.domain.ports.out.UserRepository;
 import com.micropay.backend.domain.ports.out.WalletRepository;
 import com.micropay.backend.domain.valueobjects.*;
 import org.slf4j.Logger;
@@ -48,19 +53,28 @@ public class TopUpService {
     private final PaymentProviderAdapter payments;
     private final NotificationAdapter notifications;
     private final FeeService feeService;
+    private final RiskUseCases riskService;
+    private final UserRepository users;
+    private final UserProfileRepository profiles;
 
     public TopUpService(TopUpRepository topUps,
                         WalletRepository wallets,
                         TransactionRepository transactions,
                         PaymentProviderAdapter payments,
                         NotificationAdapter notifications,
-                        FeeService feeService) {
+                        FeeService feeService,
+                        RiskUseCases riskService,
+                        UserRepository users,
+                        UserProfileRepository profiles) {
         this.topUps = topUps;
         this.wallets = wallets;
         this.transactions = transactions;
         this.payments = payments;
         this.notifications = notifications;
         this.feeService = feeService;
+        this.riskService = riskService;
+        this.users = users;
+        this.profiles = profiles;
     }
 
     // ────────────────── 1. Crear checkout ──────────────────
@@ -71,10 +85,13 @@ public class TopUpService {
                                 Money amount,
                                 String successUrl,
                                 String cancelUrl,
-                                String idempotencyKey) {
+                                String idempotencyKey,
+                                String challengeToken) {
         if (amount == null || !amount.isPositive()) {
             throw new BusinessRuleViolationException("TOPUP_AMOUNT_INVALID", "Monto top-up debe ser > 0");
         }
+        // RiskEngine (T23): evalúa la operación antes de crear el checkout.
+        riskService.enforce(riskContext(userId, RiskOperation.TOPUP, amount), challengeToken);
         Wallet wallet = wallets.findById(walletId)
                 .orElseThrow(() -> new WalletNotFoundException(walletId.uuid()));
         if (!wallet.userId().equals(userId)) {
@@ -258,5 +275,22 @@ public class TopUpService {
         } catch (Exception e) {
             log.warn("No se pudo enviar notificación {} a user {}: {}", tpl, userId, e.getMessage());
         }
+    }
+
+    /** Construye el contexto de riesgo con kyc/país best-effort (tolerante a datos ausentes). */
+    private RiskContext riskContext(UserId userId, RiskOperation op, Money amount) {
+        KycLevel kyc = KycLevel.LEVEL_0;
+        String country = null;
+        try {
+            kyc = users.findById(userId).map(User::kycLevel).orElse(KycLevel.LEVEL_0);
+        } catch (Exception e) {
+            log.debug("[RISK] kyc no disponible para user {}: {}", userId, e.getMessage());
+        }
+        try {
+            country = profiles.findByUserId(userId).map(UserProfile::addressCountry).orElse(null);
+        } catch (Exception e) {
+            log.debug("[RISK] país no disponible para user {}: {}", userId, e.getMessage());
+        }
+        return new RiskContext(userId, kyc, country, op, amount, null, null);
     }
 }

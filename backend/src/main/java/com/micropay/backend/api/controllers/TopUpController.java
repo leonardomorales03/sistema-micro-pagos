@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,26 +35,38 @@ import java.util.UUID;
 public class TopUpController {
 
     private final TopUpService topUps;
+    private final boolean multiCurrencyEnabled;
 
-    public TopUpController(TopUpService topUps) { this.topUps = topUps; }
+    public TopUpController(TopUpService topUps,
+                           @Value("${micropay.multicurrency.enabled:false}") boolean multiCurrencyEnabled) {
+        this.topUps = topUps;
+        this.multiCurrencyEnabled = multiCurrencyEnabled;
+    }
 
     @Operation(summary = "Crear intento de recarga (checkout proveedor)",
                description = "Crea un TopUp PENDING_PAYMENT + checkout URL del proveedor. Moneda debe coincidir con moneda wallet.")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Checkout creado OK. checkout_url navegable."),
             @ApiResponse(responseCode = "400", description = "Monto/moneda inválida o wallet no perteneciente."),
-            @ApiResponse(responseCode = "404", description = "Wallet no existe.")
+            @ApiResponse(responseCode = "404", description = "Wallet no existe."),
+            @ApiResponse(responseCode = "428", description = "Challenge de riesgo requerido (step-up)")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<TopUpDtos.TopUpResponse> create(
             @Valid @RequestBody TopUpDtos.CreateTopUpRequest req,
-            @Parameter(hidden = true) @CurrentUser UserId currentUser) {
-        Currency cur = Currency.valueOf(req.currency().toUpperCase());
+            @Parameter(hidden = true) @CurrentUser UserId currentUser,
+            @RequestHeader(value = "X-Risk-Challenge", required = false) String challengeToken) {
+        String iso = (req.currency() == null || req.currency().isBlank()) ? "COP" : req.currency();
+        Currency cur = Currency.fromIso(iso);
+        if (!cur.equals(Currency.COP) && !multiCurrencyEnabled) {
+            throw new BusinessRuleViolationException("MULTICURRENCY_DISABLED",
+                    "La moneda %s no está permitida sin el flag multi-moneda activo".formatted(cur));
+        }
         Money m = Money.of(req.amount() == null ? BigDecimal.ZERO : req.amount(), cur);
         TopUp t = topUps.createCheckout(currentUser,
                 WalletId.from(req.walletId()), m,
-                req.successUrl(), req.cancelUrl(), req.idempotencyKey());
+                req.successUrl(), req.cancelUrl(), req.idempotencyKey(), challengeToken);
         return ResponseEntity.status(201).body(toResp(t));
     }
 

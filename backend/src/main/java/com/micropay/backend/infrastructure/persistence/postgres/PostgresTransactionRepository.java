@@ -8,25 +8,36 @@ import com.micropay.backend.infrastructure.persistence.jpa.entities.AccountMoveJ
 import com.micropay.backend.infrastructure.persistence.jpa.entities.TransactionJpa;
 import com.micropay.backend.infrastructure.persistence.jpa.repositories.AccountMoveJpaRepository;
 import com.micropay.backend.infrastructure.persistence.jpa.repositories.TransactionJpaRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public class PostgresTransactionRepository implements TransactionRepository {
 
+    private static final Logger log = LoggerFactory.getLogger(PostgresTransactionRepository.class);
+    private static final TypeReference<Map<String, Object>> METADATA_TYPE = new TypeReference<>() {};
+
     private final TransactionJpaRepository txJpa;
     private final AccountMoveJpaRepository moveJpa;
+    private final ObjectMapper json;
 
     public PostgresTransactionRepository(TransactionJpaRepository txJpa,
-                                         AccountMoveJpaRepository moveJpa) {
+                                         AccountMoveJpaRepository moveJpa,
+                                         ObjectMapper json) {
         this.txJpa = txJpa;
         this.moveJpa = moveJpa;
+        this.json = json;
     }
 
     @Override
@@ -70,10 +81,41 @@ public class PostgresTransactionRepository implements TransactionRepository {
     }
 
     @Override
+    public List<Transaction> search(UUID walletId, String type, String status, String currency,
+                                    java.time.Instant from, java.time.Instant to,
+                                    int page, int pageSize) {
+        TransactionJpa.TxType txType = type == null || type.isBlank() ? null : TransactionJpa.TxType.valueOf(type.trim().toUpperCase());
+        TransactionJpa.TxStatus txStatus = status == null || status.isBlank() ? null : TransactionJpa.TxStatus.valueOf(status.trim().toUpperCase());
+        String cur = currency == null || currency.isBlank() ? null : currency.trim().toUpperCase();
+        int p = Math.max(0, page);
+        int size = Math.min(200, Math.max(1, pageSize));
+        return txJpa.search(walletId, txType, txStatus, cur, from, to, PageRequest.of(p, size))
+                .stream()
+                .map(j -> toDomain(j, List.of()))
+                .toList();
+    }
+
+    @Override
     public List<AccountMove> listAccountMoves(TransactionId transactionId) {
         return moveJpa.findByTransactionIdOrderByCreatedAtAsc(transactionId.uuid())
                 .stream()
                 .map(this::moveToDomain)
+                .toList();
+    }
+
+    @Override
+    public List<com.micropay.backend.domain.valueobjects.AnnualTaxLine> annualTaxSummary(
+            java.time.Instant from, java.time.Instant to) {
+        return txJpa.annualTaxSummary(from, to, TransactionJpa.TxStatus.COMPLETED)
+                .stream()
+                .map(row -> new com.micropay.backend.domain.valueobjects.AnnualTaxLine(
+                        (UUID) row[0],
+                        row[1] != null ? row[1].toString() : null,
+                        (String) row[2],
+                        (java.math.BigDecimal) row[3],
+                        (java.math.BigDecimal) row[4],
+                        (java.math.BigDecimal) row[5],
+                        row[6] != null ? ((Number) row[6]).longValue() : 0L))
                 .toList();
     }
 
@@ -107,6 +149,7 @@ public class PostgresTransactionRepository implements TransactionRepository {
                 .createdBy(j.getCreatedBy())
                 .failureReason(j.getFailureReason())
                 .note(j.getNote())
+                .metadata(readMetadata(j.getMetadata()))
                 .accountMoves(safeMoves);
         if (j.getWalletFromId() != null) b.walletFromId(WalletId.from(j.getWalletFromId()));
         if (j.getWalletToId() != null) b.walletToId(WalletId.from(j.getWalletToId()));
@@ -132,6 +175,7 @@ public class PostgresTransactionRepository implements TransactionRepository {
         j.setUpdatedAt(d.updatedAt());
         j.setFailureReason(d.failureReason());
         j.setNote(d.note());
+        j.setMetadata(writeMetadata(d.metadata()));
         return j;
     }
 
@@ -173,6 +217,27 @@ public class PostgresTransactionRepository implements TransactionRepository {
                     .orElse(Currency.USD);
         } catch (Exception e) {
             return Currency.USD;
+        }
+    }
+
+    /** Serializa el mapa de metadatos a JSONB; mapa vacío se persiste como NULL. */
+    private String writeMetadata(Map<String, Object> metadata) {
+        if (metadata == null || metadata.isEmpty()) return null;
+        try {
+            return json.writeValueAsString(metadata);
+        } catch (Exception e) {
+            log.warn("No se pudo serializar metadata de transacción: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private Map<String, Object> readMetadata(String raw) {
+        if (raw == null || raw.isBlank()) return Map.of();
+        try {
+            return json.readValue(raw, METADATA_TYPE);
+        } catch (Exception e) {
+            log.warn("Metadata de transacción ilegible, se ignora: {}", e.getMessage());
+            return Map.of();
         }
     }
 }

@@ -18,7 +18,8 @@ public final class TopUpDtos {
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED, example = "50000.00", description = "Monto > 0")
             @JsonProperty("amount") BigDecimal amount,
 
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED, example = "COP", allowableValues = {"COP","USD","EUR"})
+            @Schema(description = "Moneda del topup (opcional; por defecto COP). Otras monedas requieren flag multi-moneda ON.",
+                    example = "COP", allowableValues = {"COP","USD","EUR","ARS","BRL","JPY"})
             @JsonProperty("currency") String currency,
 
             @Schema(example = "https://app.ejemplo.com/topups/success")

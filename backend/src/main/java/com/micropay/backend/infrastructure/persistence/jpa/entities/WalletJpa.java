@@ -49,7 +49,7 @@ public class WalletJpa {
     @Column(name = "version", nullable = false)
     private long version;
 
-    public enum WalletStatus { ACTIVE, FROZEN, CLOSED }
+    public enum WalletStatus { ACTIVE, FROZEN, CLOSED, UNDER_REVIEW }
 
     public WalletJpa() {}
 

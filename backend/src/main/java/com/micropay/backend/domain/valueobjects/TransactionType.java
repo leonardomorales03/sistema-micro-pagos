@@ -9,7 +9,8 @@ public enum TransactionType {
     REFUND("Reembolso"),
     REFERRAL_REWARD("Recompensa por referido"),
     FEE_ADJUSTMENT("Ajuste manual de comisiones (Admin)"),
-    FX_CONVERSION("Conversión FX (multi-moneda)");
+    FX_CONVERSION("Conversión FX (multi-moneda)"),
+    ADJUSTMENT("Ajuste manual de saldo (Admin)");
 
     private final String description;
 

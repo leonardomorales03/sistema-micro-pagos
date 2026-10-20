@@ -4,15 +4,19 @@ import com.micropay.backend.domain.entities.AccountMove;
 import com.micropay.backend.domain.entities.PayoutDestination;
 import com.micropay.backend.domain.entities.Transaction;
 import com.micropay.backend.domain.entities.User;
+import com.micropay.backend.domain.entities.UserProfile;
 import com.micropay.backend.domain.entities.Wallet;
 import com.micropay.backend.domain.entities.Withdrawal;
 import com.micropay.backend.domain.exceptions.BusinessRuleViolationException;
 import com.micropay.backend.domain.exceptions.UserNotFoundException;
 import com.micropay.backend.domain.exceptions.WalletNotFoundException;
+import com.micropay.backend.domain.ports.in.ReferralUseCases;
+import com.micropay.backend.domain.ports.in.RiskUseCases;
 import com.micropay.backend.domain.ports.out.NotificationAdapter;
 import com.micropay.backend.domain.ports.out.PayoutDestinationRepository;
 import com.micropay.backend.domain.ports.out.PayoutProviderPort;
 import com.micropay.backend.domain.ports.out.TransactionRepository;
+import com.micropay.backend.domain.ports.out.UserProfileRepository;
 import com.micropay.backend.domain.ports.out.UserRepository;
 import com.micropay.backend.domain.ports.out.WalletRepository;
 import com.micropay.backend.domain.ports.out.WithdrawalRepository;
@@ -58,26 +62,35 @@ public class WithdrawalService {
     private final WalletRepository wallets;
     private final TransactionRepository transactions;
     private final UserRepository users;
+    private final UserProfileRepository profiles;
     private final PayoutProviderPort payouts;
     private final NotificationAdapter notifications;
     private final FeeService feeService;
+    private final RiskUseCases riskService;
+    private final ReferralUseCases referralUseCases;
 
     public WithdrawalService(WithdrawalRepository withdrawals,
                              PayoutDestinationRepository destinations,
                              WalletRepository wallets,
                              TransactionRepository transactions,
                              UserRepository users,
+                             UserProfileRepository profiles,
                              PayoutProviderPort payouts,
                              NotificationAdapter notifications,
-                             FeeService feeService) {
+                             FeeService feeService,
+                             RiskUseCases riskService,
+                             ReferralUseCases referralUseCases) {
         this.withdrawals = withdrawals;
         this.destinations = destinations;
         this.wallets = wallets;
         this.transactions = transactions;
         this.users = users;
+        this.profiles = profiles;
         this.payouts = payouts;
         this.notifications = notifications;
         this.feeService = feeService;
+        this.riskService = riskService;
+        this.referralUseCases = referralUseCases;
     }
 
     // ────────────────── 1. Solicitar retiro (BR 20.1/20.2/20.6) ──────────────────
@@ -87,7 +100,8 @@ public class WithdrawalService {
                                         WalletId walletId,
                                         PayoutDestinationId destinationId,
                                         Money amount,
-                                        String idempotencyKey) {
+                                        String idempotencyKey,
+                                        String challengeToken) {
         if (amount == null || !amount.isPositive()) {
             throw new BusinessRuleViolationException("WITHDRAWAL_AMOUNT_INVALID", "Monto retiro debe ser > 0");
         }
@@ -128,6 +142,8 @@ public class WithdrawalService {
         }
 
         Currency cur = amount.currency();
+        // RiskEngine (T23): evalúa retiro grande / cross-border antes de reservar fondos.
+        riskService.enforce(riskContext(userId, user.kycLevel(), RiskOperation.WITHDRAWAL, amount), challengeToken);
         // FeeEngine (Requisito 30.2): flat + provider fee sobre el retiro. Default 0.
         FeeContext feeCtx = FeeContext.of(FeeOperation.WITHDRAWAL, amount);
         Money fee = feeService.quoteTotal(feeCtx);
@@ -238,6 +254,8 @@ public class WithdrawalService {
                 Map.of("withdrawal_id", saved.id().toString(),
                         "amount", saved.grossAmount().toString(),
                         "wallet", saved.walletId().toString()));
+        // T27: acción cualificante de referidos — un retiro COMPLETED del invitee dispara el bono.
+        registerReferralHook(saved);
         log.info("[WITHDRAWAL] ✅ COMPLETED id={} wallet={} amount={}",
                 saved.id(), saved.walletId(), saved.grossAmount());
         return saved;
@@ -325,5 +343,45 @@ public class WithdrawalService {
         } catch (Exception e) {
             log.warn("No se pudo enviar notificación {} a user {}: {}", template, userId, e.getMessage());
         }
+    }
+
+    /**
+     * T27 — Hook de acción cualificante de referidos.
+     * <p>
+     * Punto de enganche EXACTO: {@link #complete(Withdrawal)} (transición del retiro a COMPLETED).
+     * Best-effort vía {@code afterCommit} para no romper la operación principal: el bono se intenta
+     * pagar sólo si el retiro se confirma, y cualquier fallo se registra como warning.
+     * {@code payQualifyingBonus} es {@code REQUIRES_NEW} e idempotente, de modo que puede
+     * ejecutarse en su propia transacción tras el commit del retiro.
+     */
+    private void registerReferralHook(Withdrawal w) {
+        if (referralUseCases == null) return;
+        Runnable hook = () -> {
+            try {
+                referralUseCases.payQualifyingBonus(w.userId().uuid(), w.grossAmount());
+            } catch (Exception e) {
+                log.warn("[WITHDRAWAL] Bono de referido best-effort falló para invitee={}: {}",
+                        w.userId(), e.getMessage());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() { hook.run(); }
+            });
+        } else {
+            hook.run();
+        }
+    }
+
+    /** Construye el contexto de riesgo; el país se resuelve best-effort desde el perfil. */
+    private RiskContext riskContext(UserId userId, KycLevel kyc, RiskOperation op, Money amount) {
+        String country = null;
+        try {
+            country = profiles.findByUserId(userId).map(UserProfile::addressCountry).orElse(null);
+        } catch (Exception e) {
+            log.debug("[RISK] país no disponible para user {}: {}", userId, e.getMessage());
+        }
+        return new RiskContext(userId, kyc == null ? KycLevel.LEVEL_0 : kyc, country, op, amount, null, null);
     }
 }

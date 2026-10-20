@@ -23,5 +23,11 @@ public interface UserRepository {
 
     List<User> list(int page, int pageSize);
 
+    /**
+     * Búsqueda admin (T24): por email / teléfono / nombre / id (parcial), paginada.
+     * Si {@code q} es blank → equivale a {@link #list(int, int)}.
+     */
+    List<User> search(String q, int page, int pageSize);
+
     boolean existsByEmail(Email email);
 }

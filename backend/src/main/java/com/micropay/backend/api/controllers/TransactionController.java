@@ -1,10 +1,10 @@
 package com.micropay.backend.api.controllers;
 
 import com.micropay.backend.api.dtos.TransactionDtos;
+import com.micropay.backend.application.services.TransactionService;
 import com.micropay.backend.domain.entities.AccountMove;
 import com.micropay.backend.domain.entities.Transaction;
 import com.micropay.backend.domain.exceptions.TransactionNotFoundException;
-import com.micropay.backend.domain.ports.in.TransactionUseCases;
 import com.micropay.backend.domain.valueobjects.Currency;
 import com.micropay.backend.domain.valueobjects.Money;
 import com.micropay.backend.domain.valueobjects.ShortCode;
@@ -30,30 +30,35 @@ import java.util.UUID;
 @SecurityRequirement(name = "bearerAuth")
 public class TransactionController {
 
-    private final TransactionUseCases tx;
+    private final TransactionService tx;
 
-    public TransactionController(TransactionUseCases tx) { this.tx = tx; }
+    public TransactionController(TransactionService tx) { this.tx = tx; }
 
     @PostMapping("/transfer")
     @Operation(summary = "Transferencia P2P entre wallets",
                description = "ACID: Wallet distributed lock + double entry ledger. " +
-                       "Retorna 409 si hay conflicto de concurrencia (reintento sugerido).")
+                       "Retorna 409 si hay conflicto de concurrencia (reintento sugerido). " +
+                       "Puede retornar 428 si el RiskEngine exige step-up (header X-Risk-Challenge-Token).")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Transferencia exitosa"),
             @ApiResponse(responseCode = "400", description = "Mismos wallets / monto <= 0"),
             @ApiResponse(responseCode = "409", description = "Conflicto lock distribuido, reintente"),
-            @ApiResponse(responseCode = "422", description = "Saldo insuficiente / moneda distinta / regla negocio violada")
+            @ApiResponse(responseCode = "422", description = "Saldo insuficiente / moneda distinta / regla negocio violada"),
+            @ApiResponse(responseCode = "428", description = "Challenge de riesgo requerido (step-up)")
     })
     @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(#req.walletFromId.toString(), authentication)")
-    public ResponseEntity<TransactionDtos.TransactionResponse> transferP2P(@RequestBody TransactionDtos.TransferRequest req,
-                                                                            @Parameter(hidden = true) @CurrentUser UserId currentUser) {
+    public ResponseEntity<TransactionDtos.TransactionResponse> transferP2P(
+            @RequestBody TransactionDtos.TransferRequest req,
+            @Parameter(hidden = true) @CurrentUser UserId currentUser,
+            @RequestHeader(value = "X-Risk-Challenge", required = false) String challengeToken) {
         Currency cur = Currency.valueOf(req.currency().toUpperCase());
         Transaction result = tx.transferP2P(
                 WalletId.from(req.walletFromId()),
                 WalletId.from(req.walletToId()),
                 Money.of(req.amount(), cur),
                 currentUser,
-                req.note()
+                req.note(),
+                challengeToken
         );
         return ResponseEntity.ok(toResp(result, true));
     }

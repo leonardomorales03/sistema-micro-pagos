@@ -222,25 +222,45 @@ micropay.limits:
     expiration-hours: 24
 
 # =============================================================
-#  MULTI-MONEDA — Tasas y USD$1 max en sandbox
+#  MULTI-MONEDA — Tasas y USD$1 max en sandbox (T26, Requisito 29)
+#  · micropay.multicurrency.enabled: flag de NEGOCIO (T26). OFF por
+#    defecto → el sistema se comporta EXACTAMENTE igual que sin FX.
+#  · micropay.fx.*: adaptador FX configurable (stub sandbox determinista
+#    + cache Redis TTL corto). En producción se sustituye por un
+#    proveedor externo real sin cambiar el contrato FxRatePort.
+#  · rates: mapa <BASE><QUOTE> -> rate (unidades de QUOTE por 1 BASE).
 # =============================================================
+micropay.multicurrency:
+  enabled: ${FEATURE_MULTICURRENCY_ENABLED:false}
+
 micropay.fx:
   enabled: true
   default-currency: COP
+  cache-ttl-seconds: ${MICROPAY_FX_CACHE_TTL_SECONDS:120}
   rates:
     USDCOP: 4100.00
     EURCOP: 4500.00
     USDEUR: 0.91
+    ARSCOP: 4.60
+    BRLCOP: 720.00
+    JPYCOP: 27.00
   sandbox-max-usd: 1.00
 
 # =============================================================
-#  REFERRALS — 5% flat, umbral $10
+#  REFERRALS — 5% flat, umbral $10 (T27 / Requisito 31)
+#  Modelo: al cumplirse la ACCIÓN CUALIFICANTE (un retiro del invitee
+#  >= withdrawal-threshold-amount en su moneda) el referrer recibe un
+#  bono = reward-percent x monto cualificante. min-kyc-level gatea el KYC
+#  mínimo del invitee; qualifying-action es documental (hoy: WITHDRAWAL).
 # =============================================================
 micropay.referrals:
   enabled: true
   reward-percent: 0.05
   withdrawal-threshold-amount: 10.00
   withdrawal-threshold-currency: USD
+  min-kyc-level: ${MICROPAY_REFERRALS_MIN_KYC:LEVEL_1}
+  qualifying-action: ${MICROPAY_REFERRALS_QUALIFYING_ACTION:WITHDRAWAL}
+  invite-base-url: ${MICROPAY_REFERRALS_INVITE_BASE_URL:https://app.micropay.example/register}
 
 # =============================================================
 #  FEES — FeeEngine configurable y versionado (Requisito 30)
@@ -293,3 +313,56 @@ micropay.webhooks:
   batch-size: ${MICROPAY_WEBHOOK_BATCH_SIZE:100}
   retry-cron: "0 */1 * * * *"
   retry-delays: 1m,5m,15m,1h,6h,24h
+
+# =============================================================
+#  RISK ENGINE — AntiFraude + velocity (Requisito 27, T23)
+# =============================================================
+micropay.risk:
+  enabled: ${MICROPAY_RISK_ENABLED:true}
+  challenge-ttl-seconds: ${MICROPAY_RISK_CHALLENGE_TTL:300}
+  first-topup-max: ${MICROPAY_RISK_FIRST_TOPUP_MAX:100}
+  topup-per-day-unverified: ${MICROPAY_RISK_TOPUP_PER_DAY_UNVERIFIED:2}
+  large-withdrawal-threshold: ${MICROPAY_RISK_LARGE_WITHDRAWAL:1000}
+  large-refund-threshold: ${MICROPAY_RISK_LARGE_REFUND:1000}
+  cross-border-blocklist: [CUBA, IRAN, NORTH_KOREA, RUSSIA, SYRIA]
+  velocity:
+    p2p-per-minute: ${MICROPAY_RISK_P2P_PER_MIN:10}
+    p2p-per-hour: ${MICROPAY_RISK_P2P_PER_HOUR:100}
+    p2p-per-day: ${MICROPAY_RISK_P2P_PER_DAY:500}
+
+# =============================================================
+#  ADMIN BACKOFFICE — RBAC avanzado (T24, Requisitos 26.x)
+#  · require-mfa: cuando TRUE, el backoffice debe reforzar el MFA
+#    obligatorio. La infra MFA ya existe (infrastructure/security/
+#    MfaService.java + SandboxMfaService.java); este flag queda como
+#    configuración del gate (el enforcement de MFA por método se
+#    difiere a la tarea de seguridad 34.3 para no romper el flujo actual).
+#  · rate-limit-per-minute: límite de peticiones al backoffice por minuto
+#    (referencia; el filtrado de límite se aplicará a nivel de infra proxy).
+# =============================================================
+micropay.admin:
+  require-mfa: ${MICROPAY_ADMIN_REQUIRE_MFA:false}
+  rate-limit-per-minute: ${MICROPAY_ADMIN_RATE_LIMIT:120}
+
+# =============================================================
+#  REPORTS — Exports CSV asíncronos + Cashflow (T25, Requisito 28)
+#  · storage-dir: directorio local del storage (adaptador sustituible por S3).
+#  · download-ttl-hours: caducidad del enlace de descarga (token).
+#  · poll-cron / poll-batch-size: poller que procesa los jobs en estado QUEUED.
+# =============================================================
+micropay.reports:
+  storage-dir: ${MICROPAY_REPORTS_STORAGE_DIR:./build/reports}
+  download-ttl-hours: ${MICROPAY_REPORTS_DOWNLOAD_TTL_HOURS:24}
+  max-rows: ${MICROPAY_REPORTS_MAX_ROWS:50000}
+  poll-cron: "0 */1 * * * *"
+  poll-batch-size: ${MICROPAY_REPORTS_POLL_BATCH:10}
+
+# =============================================================
+#  RECONCILIACIÓN — Comparación interno vs proveedor (T25, Requisito 28.3)
+#  · providers: lista separada por comas de proveedores a reconciliar.
+#  · cron: ejecución diaria (por defecto 02:00) del día anterior.
+# =============================================================
+micropay.reconciliation:
+  enabled: ${MICROPAY_RECONCILIATION_ENABLED:true}
+  providers: ${MICROPAY_RECONCILIATION_PROVIDERS:stripe}
+  cron: "0 0 2 * * *"

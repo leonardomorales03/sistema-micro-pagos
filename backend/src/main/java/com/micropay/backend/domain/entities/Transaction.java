@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -41,6 +42,7 @@ public final class Transaction {
     private final List<AccountMove> accountMoves;
     private String failureReason;
     private final String note;
+    private final Map<String, Object> metadata;
 
     private Transaction(Builder b) {
         this.id = b.id;
@@ -59,6 +61,7 @@ public final class Transaction {
         this.accountMoves = new ArrayList<>(b.accountMoves);
         this.failureReason = b.failureReason;
         this.note = b.note;
+        this.metadata = b.metadata == null ? Map.of() : Map.copyOf(b.metadata);
     }
 
     public TransactionId id() {
@@ -125,6 +128,11 @@ public final class Transaction {
         return note;
     }
 
+    /** Metadatos libres de la transacción (p. ej. rate FX usado). Nunca null; mapa vacío si no hay. */
+    public Map<String, Object> metadata() {
+        return metadata;
+    }
+
     // ─────────────── COMPORTAMIENTO ───────────────
 
     /**
@@ -168,6 +176,7 @@ public final class Transaction {
         private final List<AccountMove> accountMoves = new ArrayList<>();
         private String failureReason;
         private String note;
+        private Map<String, Object> metadata = Map.of();
 
         public Builder id(TransactionId id) { this.id = id; return this; }
         public Builder type(TransactionType type) { this.type = type; return this; }
@@ -185,6 +194,7 @@ public final class Transaction {
         public Builder accountMoves(List<AccountMove> m) { this.accountMoves.addAll(m); return this; }
         public Builder failureReason(String r) { this.failureReason = r; return this; }
         public Builder note(String n) { this.note = n; return this; }
+        public Builder metadata(Map<String, Object> m) { this.metadata = m; return this; }
 
         public Transaction build() {
             return new Transaction(this);

@@ -53,6 +53,19 @@ public class PostgresUserRepository implements UserRepository {
     }
 
     @Override
+    public List<User> search(String q, int page, int pageSize) {
+        int p = Math.max(0, page);
+        int size = Math.min(100, Math.max(1, pageSize));
+        if (q == null || q.isBlank()) {
+            return list(p, size);
+        }
+        return jpa.search(q.trim(), PageRequest.of(p, size))
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
     public boolean existsByEmail(Email email) {
         return jpa.existsByEmailIgnoreCase(email.value());
     }

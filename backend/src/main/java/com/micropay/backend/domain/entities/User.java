@@ -150,6 +150,26 @@ public final class User {
     }
     public boolean hasRole(String role) { return this.roles.contains(role); }
 
+    /**
+     * Reemplaza los roles "admin" del usuario (T24 — grantRoles), conservando SIEMPRE ROLE_USER.
+     * Los nombres recibidos (p.ej. SUPPORT, COMPLIANCE) se normalizan a mayúsculas y se
+     * almacenan con prefijo ROLE_ si no lo traen. La validación de roles permitidos es
+     * responsabilidad del servicio de aplicación.
+     */
+    public void replaceAdminRoles(List<String> newRoles) {
+        this.roles.removeIf(r -> !"ROLE_USER".equals(r));
+        if (newRoles != null) {
+            for (String r : newRoles) {
+                if (r == null || r.isBlank()) continue;
+                String normalized = r.trim().toUpperCase();
+                String stored = normalized.startsWith("ROLE_") ? normalized : "ROLE_" + normalized;
+                if (!this.roles.contains(stored)) this.roles.add(stored);
+            }
+        }
+        if (!this.roles.contains("ROLE_USER")) this.roles.add("ROLE_USER");
+        touch();
+    }
+
     // ────────── BUILDER ──────────
     public static Builder builder() { return new Builder(); }
     public static final class Builder {

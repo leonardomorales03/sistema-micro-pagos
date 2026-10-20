@@ -4,23 +4,29 @@ import com.micropay.backend.domain.entities.AccountMove;
 import com.micropay.backend.domain.entities.Refund;
 import com.micropay.backend.domain.entities.Transaction;
 import com.micropay.backend.domain.entities.User;
+import com.micropay.backend.domain.entities.UserProfile;
 import com.micropay.backend.domain.entities.Wallet;
 import com.micropay.backend.domain.exceptions.BusinessRuleViolationException;
 import com.micropay.backend.domain.exceptions.ConcurrencyConflictException;
 import com.micropay.backend.domain.exceptions.TransactionNotFoundException;
 import com.micropay.backend.domain.exceptions.UserNotFoundException;
 import com.micropay.backend.domain.exceptions.WalletNotFoundException;
+import com.micropay.backend.domain.ports.in.RiskUseCases;
 import com.micropay.backend.domain.ports.out.NotificationAdapter;
 import com.micropay.backend.domain.ports.out.RefundRepository;
 import com.micropay.backend.domain.ports.out.TransactionRepository;
+import com.micropay.backend.domain.ports.out.UserProfileRepository;
 import com.micropay.backend.domain.ports.out.UserRepository;
 import com.micropay.backend.domain.ports.out.WalletLockAdapter;
 import com.micropay.backend.domain.ports.out.WalletRepository;
 import com.micropay.backend.domain.valueobjects.Currency;
 import com.micropay.backend.domain.valueobjects.FeeContext;
 import com.micropay.backend.domain.valueobjects.FeeOperation;
+import com.micropay.backend.domain.valueobjects.KycLevel;
 import com.micropay.backend.domain.valueobjects.Money;
 import com.micropay.backend.domain.valueobjects.RefundType;
+import com.micropay.backend.domain.valueobjects.RiskContext;
+import com.micropay.backend.domain.valueobjects.RiskOperation;
 import com.micropay.backend.domain.valueobjects.TransactionId;
 import com.micropay.backend.domain.valueobjects.TransactionStatus;
 import com.micropay.backend.domain.valueobjects.TransactionType;
@@ -81,9 +87,11 @@ public class RefundService {
     private final TransactionRepository transactions;
     private final WalletRepository wallets;
     private final UserRepository users;
+    private final UserProfileRepository profiles;
     private final WalletLockAdapter walletLock;
     private final FeeService feeService;
     private final NotificationAdapter notifications;
+    private final RiskUseCases riskService;
     private final org.springframework.retry.support.RetryTemplate refundRetryTemplate;
     private final TransactionTemplate refundTransaction;
 
@@ -91,9 +99,11 @@ public class RefundService {
                          TransactionRepository transactions,
                          WalletRepository wallets,
                          UserRepository users,
+                         UserProfileRepository profiles,
                          WalletLockAdapter walletLock,
                          FeeService feeService,
                          NotificationAdapter notifications,
+                         RiskUseCases riskService,
                          @Qualifier("transferRetryTemplate")
                          org.springframework.retry.support.RetryTemplate refundRetryTemplate,
                          PlatformTransactionManager transactionManager) {
@@ -101,9 +111,11 @@ public class RefundService {
         this.transactions = transactions;
         this.wallets = wallets;
         this.users = users;
+        this.profiles = profiles;
         this.walletLock = walletLock;
         this.feeService = feeService;
         this.notifications = notifications;
+        this.riskService = riskService;
         this.refundRetryTemplate = refundRetryTemplate;
         this.refundTransaction = new TransactionTemplate(transactionManager);
         this.refundTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -118,12 +130,15 @@ public class RefundService {
     public RefundResult createRefund(UserId refundingUserId,
                                      TransactionId sourceTxId,
                                      Money amount,
-                                     String reason) {
+                                     String reason,
+                                     String challengeToken) {
         if (refundingUserId == null) throw new IllegalArgumentException("refundingUserId");
         if (sourceTxId == null) throw new IllegalArgumentException("sourceTxId");
         if (amount == null || !amount.isPositive()) {
             throw new BusinessRuleViolationException("REFUND_AMOUNT_INVALID", "Monto refund debe ser > 0");
         }
+        // RiskEngine (T23): evalúa reembolso grande / cross-border antes de ejecutar el reverse transfer.
+        riskService.enforce(riskContext(refundingUserId, RiskOperation.REFUND, amount), challengeToken);
         try {
             return refundRetryTemplate.execute(
                     ctx -> {
@@ -419,5 +434,22 @@ public class RefundService {
         } catch (Exception e) {
             log.warn("No se pudo enviar notificación {} a user {}: {}", template, userId, e.getMessage());
         }
+    }
+
+    /** Construye el contexto de riesgo con kyc/país best-effort (tolerante a datos ausentes). */
+    private RiskContext riskContext(UserId userId, RiskOperation op, Money amount) {
+        KycLevel kyc = KycLevel.LEVEL_0;
+        String country = null;
+        try {
+            kyc = users.findById(userId).map(User::kycLevel).orElse(KycLevel.LEVEL_0);
+        } catch (Exception e) {
+            log.debug("[RISK] kyc no disponible para user {}: {}", userId, e.getMessage());
+        }
+        try {
+            country = profiles.findByUserId(userId).map(UserProfile::addressCountry).orElse(null);
+        } catch (Exception e) {
+            log.debug("[RISK] país no disponible para user {}: {}", userId, e.getMessage());
+        }
+        return new RiskContext(userId, kyc, country, op, amount, null, null);
     }
 }
