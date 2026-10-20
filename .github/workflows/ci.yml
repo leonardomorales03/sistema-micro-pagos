@@ -4,7 +4,7 @@
 #  Jobs:
 #    boundaries : guardián de límites de la arquitectura hexagonal
 #    backend    : compile + unit + property tests (jqwik)  → gate de tests
-#    docker     : build imagen + push a GHCR (solo en push, no en PR)
+#    docker     : build imagen. Push a GHCR PAUSADO (reactivar: repo var PUBLISH_IMAGE=true)
 #    sonar      : análisis estático (opt-in vía repo var ENABLE_SONAR=true)
 #
 #  T12.2: JAVA_VERSION=21 alineado con backend/Dockerfile (eclipse-temurin:21)
@@ -87,7 +87,9 @@ jobs:
       - name: Setup Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login en GHCR
-        if: github.event_name != 'pull_request'
+        # La publicación está PAUSADA: sólo se hace login si existe la repo
+        # variable PUBLISH_IMAGE=true (Settings → Secrets and variables → Actions → Variables).
+        if: github.event_name != 'pull_request' && vars.PUBLISH_IMAGE == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -101,12 +103,12 @@ jobs:
           tags: |
             type=sha,format=long
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-      - name: Build + push
+      - name: Build imagen (push opcional)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: backend/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' && vars.PUBLISH_IMAGE == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

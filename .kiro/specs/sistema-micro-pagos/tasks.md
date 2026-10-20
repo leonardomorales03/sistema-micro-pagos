@@ -322,8 +322,9 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - Configurar publicación de imagen en registry
     - Configurar que el pipeline falle si tests fallan
     - _Requisitos: 9.1, 9.2, 9.3, 9.4, 9.5_
-    - ✅ Workflow `.github/workflows/ci.yml`: jobs `boundaries` (check-boundaries.sh), `backend` (mvn verify -DskipITs -Plocal-progress + artifacts), `docker` (build + push GHCR `ghcr.io/<owner>/<repo>/backend`, `needs: backend`), `sonar` (opt-in vía repo var `ENABLE_SONAR=true`).
-    - ⚠️ Passwords/secretos: usa `GITHUB_TOKEN` automático para GHCR (requiere Workflow permissions = Read and write).
+    - ✅ Workflow `.github/workflows/ci.yml`: jobs `boundaries` (check-boundaries.sh), `backend` (mvn verify -DskipITs -Plocal-progress + artifacts), `docker` (build imagen; push a GHCR **PAUSADO** → reactivar con repo var `PUBLISH_IMAGE=true`; `needs: backend`), `sonar` (opt-in vía repo var `ENABLE_SONAR=true`).
+    - ✅ Verificado en verde en GitHub Actions (run de `07584af`): boundaries + backend + docker.
+    - ⚠️ Publicación GHCR pausada por decisión del usuario: el job sólo construye la imagen; usar `GITHUB_TOKEN` (requiere Workflow permissions = Read and write) al reactivar.
 
   - [x] 12.2 Alinear versiones de Java en CI/CD y contenedores
     - Asegurar que `setup-java` y la imagen del Dockerfile usan la misma versión (17 o 21)
