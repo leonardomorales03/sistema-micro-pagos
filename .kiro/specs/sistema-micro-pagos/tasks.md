@@ -314,18 +314,23 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - Configurar dependencias entre servicios
     - _Requisitos: 8.2_
 
-- [ ] 12. Configurar CI/CD
-  - [ ] 12.1 Crear GitHub Actions workflow
+- [x] 12. Configurar CI/CD
+  - [x] 12.1 Crear GitHub Actions workflow
     - Configurar job de test que ejecuta todos los tests
     - Configurar job de análisis con SonarQube
     - Configurar job de build de Docker image
     - Configurar publicación de imagen en registry
     - Configurar que el pipeline falle si tests fallan
     - _Requisitos: 9.1, 9.2, 9.3, 9.4, 9.5_
+    - ✅ Workflow `.github/workflows/ci.yml`: jobs `boundaries` (check-boundaries.sh), `backend` (mvn verify -DskipITs -Plocal-progress + artifacts), `docker` (build + push GHCR `ghcr.io/<owner>/<repo>/backend`, `needs: backend`), `sonar` (opt-in vía repo var `ENABLE_SONAR=true`).
+    - ⚠️ Passwords/secretos: usa `GITHUB_TOKEN` automático para GHCR (requiere Workflow permissions = Read and write).
 
-  - [ ] 12.2 Alinear versiones de Java en CI/CD y contenedores
+  - [x] 12.2 Alinear versiones de Java en CI/CD y contenedores
     - Asegurar que `setup-java` y la imagen del Dockerfile usan la misma versión (17 o 21)
     - _Requisitos: 9.1_
+    - ✅ `JAVA_VERSION: '21'` en el workflow = `eclipse-temurin:21` del `backend/Dockerfile`.
+  - ⚠️ **Pendiente T28 (antes de cerrar CI/CD):** añadir `services: postgres+redis` al job `backend` para correr los `*IT.java` (quitar `-DskipITs=true`) y activar el umbral JaCoCo 80/70% (quitar `-Plocal-progress`). Los jobs de frontend (`frontend-user`/`frontend-admin`) se agregan en T29+.
+
 
 - [x] 13. Configurar logging
   - [x] 13.1 Configurar logging a stdout
