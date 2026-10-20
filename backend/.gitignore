@@ -12,7 +12,9 @@
 target/
 build/
 .gradle/
-out/
+# NOTA: "/out/" va ANCLADO a la raíz de backend/ (salida de IDE).
+# NO usar "out/" suelto: ignoraría domain/ports/out/ (puertos OUT de la hex).
+/out/
 dist/
 *.jar
 !mvnw
