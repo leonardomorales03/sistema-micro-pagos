@@ -5,8 +5,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -35,6 +36,12 @@ public class PaymentRequestJpa {
     @Column(name = "description", length = 255)
     private String description;
 
+    @Column(name = "order_ref", length = 255)
+    private String orderReference;
+
+    @Column(name = "webhook_url", length = 1024)
+    private String webhookUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 16, nullable = false)
     private PayReqStatus status;
@@ -48,17 +55,20 @@ public class PaymentRequestJpa {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @Lob
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "payload_metadata", columnDefinition = "jsonb")
     private String payloadMetadata;
 
-    public enum PayReqStatus { PENDING, PAID, CANCELLED, EXPIRED }
+    public enum PayReqStatus { PENDING, PAID, CANCELLED, EXPIRED, REFUNDED }
 
     public PaymentRequestJpa() {}
 
@@ -80,6 +90,12 @@ public class PaymentRequestJpa {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 
+    public String getOrderReference() { return orderReference; }
+    public void setOrderReference(String orderReference) { this.orderReference = orderReference; }
+
+    public String getWebhookUrl() { return webhookUrl; }
+    public void setWebhookUrl(String webhookUrl) { this.webhookUrl = webhookUrl; }
+
     public PayReqStatus getStatus() { return status; }
     public void setStatus(PayReqStatus status) { this.status = status; }
 
@@ -91,6 +107,9 @@ public class PaymentRequestJpa {
 
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
+
+    public Instant getPaidAt() { return paidAt; }
+    public void setPaidAt(Instant paidAt) { this.paidAt = paidAt; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

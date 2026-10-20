@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -83,6 +84,8 @@ public class SecurityConfig {
                                 "/api/v1/withdrawals/sandbox/**",
                                 "/api/v1/webhooks/**"
                         ).permitAll()
+                        // 1c. PaymentRequest público: abrir el link/QR (GET). El POST /pay requiere JWT.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/public/payment-requests/*").permitAll()
                         // 2. Swagger / SpringDoc público
                         .requestMatchers(
                                 "/v3/api-docs/**",

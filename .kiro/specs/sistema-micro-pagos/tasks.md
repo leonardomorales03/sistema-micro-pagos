@@ -472,26 +472,36 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - ⚠️ `payout_destinations` FK ON DELETE RESTRICT desde withdrawals; no se puede borrar el destino default.
 
 
-- [ ] 19. Payment Requests (Links/QR Comercio)
-  - [ ] 19.1 Dominio PaymentRequest + ShortCode generator único
+- [x] 19. Payment Requests (Links/QR Comercio)
+  - [x] 19.1 Dominio PaymentRequest + ShortCode generator único
     - `PaymentRequest`, `PaymentRequestId`, `ShortCode`, `PaymentRequestStatus`
     - Port: `PaymentRequestRepository` (findByShortCode único)
     - _Requisitos: 21.1, 21.2_
-  - [ ] 19.2 CreatePaymentRequestUseCase (MERCHANT only)
+  - [x] 19.2 CreatePaymentRequestUseCase (comercio autenticado)
     - Generar shortCode colisión-safe, crear QR payload data
-    - Devolver short URL, QR payload SVG/base64, status OPEN
+    - Devolver short URL, QR payload, status PENDING (OPEN)
     - _Requisitos: 21.1, 21.2_
-  - [ ] 19.3 PayPaymentRequestUseCase cliente (cualquier USER)
-    - @Transactional: validar OPEN, límites, saldo → transferencia P2P atomica → marcar PAID → pagar webhook merchant
+  - [x] 19.3 PayPaymentRequestUseCase cliente (cualquier USER)
+    - @Transactional: validar PENDING, límites, saldo → transferencia P2P atomica → marcar PAID → webhook merchant
     - Prevenir doble pago (idempotencia al nivel request id)
     - _Requisitos: 21.3, 21.4, 21.5, 21.6_
-  - [ ] 19.4 Endpoints API merchant + público
+  - [x] 19.4 Endpoints API merchant + público
     - `POST /api/v1/merchant/payment-requests`, `GET /api/v1/merchant/payment-requests`
     - Público: `GET /api/v1/public/payment-requests/{shortCode}`, `POST /api/v1/public/payment-requests/{id}/pay`
     - _Requisitos: 21.1, 21.3, 21.6_
-  - [ ]* 19.5 Property tests PaymentRequest
+  - [ ]* 19.5 Property tests PaymentRequest — ⏸️ DIFERIDO a T28 (Priorización core)
     - **Property 25: No doble pago**
     - _Valida: Requisitos 21.5_
+  - ⚠️ **Notas T19 build 2026-10-20:**
+    - ✅ Build: `mvn -f backend/pom.xml verify -Pintegration,local-progress -DskipITs=true` BUILD SUCCESS. 35 PBT green.
+    - ✅ Boundaries: `scripts/check-boundaries.sh` exit 0, 0 infracciones hexágono.
+    - ⚠️ **Esquema**: la tabla `payment_requests` YA existía en **V1** (id, wallet_to_id, short_code, amount, currency, description, status PENDING/PAID/CANCELLED/EXPIRED, paid_transaction_id, created_by, expires_at, payload_metadata). Regla V1 inmutable → **V5 solo añade** `order_ref`, `webhook_url`, `paid_at` + amplía el CHECK a `REFUNDED`. NO se creó tabla nueva.
+    - ⚠️ **Enumeración**: dominio `PaymentRequestStatus` = PENDING/PAID/CANCELLED/EXPIRED/REFUNDED (PENDING ≡ OPEN del diseño, para alinear con V1).
+    - ⚠️ **Pago**: reutiliza `TransactionService.transferP2P` (locks Redis + Spring Retry + ledger doble entrada). Marca PAID con el `transaction_id`. Idempotente a nivel request (replay devuelve recibo sin mover fondos).
+    - ⚠️ **Roles**: el proyecto sólo define ROLE_USER/ROLE_ADMIN (no existe rol MERCHANT); "comercio" = cualquier usuario autenticado que acredita a su wallet. Configurable a futuro.
+    - ⚠️ **Webhook merchant**: best-effort HTTP POST (CREATED/PAID/EXPIRED) a `webhook_url` por request, tras commit; nunca rompe la transacción.
+    - ⚠️ **Seguridad**: `GET /api/v1/public/payment-requests/{shortCode}` permitAll; `POST /api/v1/public/payment-requests/{id}/pay` requiere JWT Bearer.
+    - ⚠️ Link corto configurable: `app.payment-request.base-url` (default `http://localhost:5173/pay/`).
 
 - [ ] 20. Plans, Subscriptions y Billing Scheduler
   - [ ] 20.1 Dominio: `Plan`, `Subscription` + ports

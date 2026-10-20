@@ -14,7 +14,11 @@ public interface PaymentRequestJpaRepository extends JpaRepository<PaymentReques
 
     Optional<PaymentRequestJpa> findByShortCode(String shortCode);
 
+    boolean existsByShortCode(String shortCode);
+
     Page<PaymentRequestJpa> findByWalletToIdOrderByCreatedAtDesc(UUID walletToId, Pageable pageable);
+
+    Page<PaymentRequestJpa> findByCreatedByOrderByCreatedAtDesc(UUID createdBy, Pageable pageable);
 
     List<PaymentRequestJpa> findByStatusAndExpiresAtBefore(String status, Instant before);
 }
