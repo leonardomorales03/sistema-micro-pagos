@@ -272,3 +272,24 @@ micropay.subscriptions:
     batch-size: 100
   dunning:
     retry-days: 1,3,7
+
+# =============================================================
+#  NOTIFICACIONES — Canal EMAIL (Requisito 25, T22)
+#  El log IN_APP siempre se persiste en `user_notifications`.
+#  EMAIL está deshabilitado por defecto (dev/tests no envían).
+# =============================================================
+micropay.notifications:
+  email:
+    enabled: ${MICROPAY_NOTIF_EMAIL_ENABLED:false}
+    from: ${MICROPAY_NOTIF_EMAIL_FROM:no-reply@micropay.example}
+    subject-prefix: ${MICROPAY_NOTIF_EMAIL_SUBJECT_PREFIX:[MicroPay]}
+
+# =============================================================
+#  WEBHOOKS A COMERCIOS — Firma HMAC + reintentos (Requisito 25.4)
+#  Backoff: 1m, 5m, 15m, 1h, 6h, 24h (~24h total, configurable).
+# =============================================================
+micropay.webhooks:
+  timeout-ms: ${MICROPAY_WEBHOOK_TIMEOUT_MS:5000}
+  batch-size: ${MICROPAY_WEBHOOK_BATCH_SIZE:100}
+  retry-cron: "0 */1 * * * *"
+  retry-delays: 1m,5m,15m,1h,6h,24h

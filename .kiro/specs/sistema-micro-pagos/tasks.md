@@ -557,18 +557,18 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - **Property 29: Conservación suma + fees**
     - _Valida: Requisitos 23.4, 30.2_
 
-- [ ] 22. Notificaciones + Webhooks a Merchants
-  - [ ] 22.1 NotificationPort + Email adapter (Thymeleaf + JavaMail + MailHog dev)
+- [x] 22. Notificaciones + Webhooks a Merchants
+  - [x] 22.1 NotificationPort + Email adapter (JavaMail; plantillas en texto plano, MailHog dev)
     - `UserNotification` entity + NotificationRepository (unread count)
-    - Canal EMAIL plantillas Thymeleaf (topup.success, tx.received, kyc.status, etc.)
+    - Canal EMAIL: `EmailNotificationAdapter` (opt-out por `user_profiles.email_notif_enabled`)
     - Canal IN_APP: persist + endpoint unread/list + mark read
     - _Requisitos: 25.1, 25.2, 25.3, 25.6_
-  - [ ] 22.2 WebhookDeliveryPort + firma HMAC + retry queue
+  - [x] 22.2 WebhookDeliveryPort + firma HMAC + retry queue
     - Configs por merchant: endpoint, signing secret, event mask
     - Payload: { id, type, timestamp, entity, data } + header `X-Signature: t=<ts>,v1=<hmac>`
     - Scheduler retries: backoff 1m/5m/15m/1h/6h/24h; persist attempts
     - _Requisitos: 25.4, 21.6_
-  - [ ] 22.3 Endpoints merchant: webhook config + delivery history + manual redeliver + simulate test event
+  - [x] 22.3 Endpoints merchant: webhook config + delivery history + manual redeliver + simulate test event
     - _Requisitos: 25.4, 25.5_
   - [ ]* 22.4 Property tests: HMAC verify invariant
     - **Property 32: HMAC signature verification**

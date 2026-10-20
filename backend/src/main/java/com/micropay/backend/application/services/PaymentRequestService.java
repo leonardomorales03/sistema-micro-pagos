@@ -1,6 +1,5 @@
 package com.micropay.backend.application.services;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.micropay.backend.domain.entities.PaymentRequest;
 import com.micropay.backend.domain.entities.Transaction;
 import com.micropay.backend.domain.entities.User;
@@ -22,6 +21,7 @@ import com.micropay.backend.domain.valueobjects.PaymentRequestStatus;
 import com.micropay.backend.domain.valueobjects.ShortCode;
 import com.micropay.backend.domain.valueobjects.UserId;
 import com.micropay.backend.domain.valueobjects.WalletId;
+import com.micropay.backend.domain.valueobjects.WebhookEventType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,11 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -71,8 +66,7 @@ public class PaymentRequestService {
     private final TransactionService transactionService;
     private final TierLimitsPort tierLimits;
     private final NotificationAdapter notifications;
-    private final ObjectMapper json;
-    private final HttpClient http;
+    private final WebhookService webhooks;
 
     @Value("${app.payment-request.base-url:http://localhost:5173/pay/}")
     private String baseUrl;
@@ -84,7 +78,7 @@ public class PaymentRequestService {
                                  TransactionService transactionService,
                                  TierLimitsPort tierLimits,
                                  NotificationAdapter notifications,
-                                 ObjectMapper json) {
+                                 WebhookService webhooks) {
         this.paymentRequests = paymentRequests;
         this.wallets = wallets;
         this.users = users;
@@ -92,10 +86,7 @@ public class PaymentRequestService {
         this.transactionService = transactionService;
         this.tierLimits = tierLimits;
         this.notifications = notifications;
-        this.json = json;
-        this.http = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(2))
-                .build();
+        this.webhooks = webhooks;
     }
 
     // ────────────────── 1. Crear PaymentRequest (Requisitos 21.1, 21.2) ──────────────────
@@ -155,7 +146,7 @@ public class PaymentRequestService {
                 pr.id(), merchantId, merchantWalletId, amount, shortCode.value());
 
         PaymentRequest saved = pr;
-        registerAfterCommit(() -> fireWebhook(saved, "CREATED", null));
+        registerAfterCommit(() -> dispatchWebhook(saved, WebhookEventType.PAYMENT_REQUEST_CREATED));
         return saved;
     }
 
@@ -195,7 +186,7 @@ public class PaymentRequestService {
         if (pr.isExpiredAt(Instant.now())) {
             pr.markExpired();
             paymentRequests.save(pr);
-            registerAfterCommit(() -> fireWebhook(pr, "EXPIRED", null));
+            registerAfterCommit(() -> dispatchWebhook(pr, WebhookEventType.PAYMENT_REQUEST_EXPIRED));
             throw new BusinessRuleViolationException("PAYMENT_REQUEST_EXPIRED",
                     "PaymentRequest %s expiró el %s".formatted(pr.id(), pr.expiresAt()));
         }
@@ -246,7 +237,7 @@ public class PaymentRequestService {
                     "tx_id", tx.id().toString(),
                     "amount", saved.amount().toString(),
                     "payer_user_id", customerId.toString()));
-            fireWebhook(saved, "PAID", tx);
+            fireWebhookPaid(saved, tx);
         });
 
         log.info("[PAYMENT_REQUEST] ✅ PAID id={} tx={} customer={} merchant={} amount={}",
@@ -287,31 +278,35 @@ public class PaymentRequestService {
         }
     }
 
-    /** Webhook best-effort al backend del comercio (Requisito 21.6). Nunca debe romper la transacción. */
-    private void fireWebhook(PaymentRequest pr, String event, Transaction tx) {
-        if (pr.webhookUrl() == null || pr.webhookUrl().isBlank()) return;
-        try {
-            Map<String,Object> body = new LinkedHashMap<>();
-            body.put("event", event);
-            body.put("payment_request_id", pr.id().toString());
-            body.put("short_code", pr.shortCode().value());
-            body.put("status", pr.status().name());
-            body.put("amount", pr.amount().amount().toPlainString());
-            body.put("currency", pr.amount().currency().isoCode());
-            if (pr.orderReference() != null) body.put("order_reference", pr.orderReference());
-            if (tx != null) body.put("transaction_id", tx.id().toString());
-            body.put("occurred_at", Instant.now().toString());
+    /**
+     * Webhook saliente al comercio (Requisitos 21.6, 25.4). Delega en {@link WebhookService}, que
+     * resuelve el endpoint (config del comercio o URL por-request de T19), firma con HMAC-SHA256 y
+     * registra el intento para reintentos. Nunca debe romper la transacción de negocio.
+     */
+    private void dispatchWebhook(PaymentRequest pr, WebhookEventType type) {
+        dispatchWebhook(pr, type, null);
+    }
 
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(pr.webhookUrl()))
-                    .timeout(Duration.ofSeconds(3))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
-                    .build();
-            HttpResponse<Void> resp = http.send(req, HttpResponse.BodyHandlers.discarding());
-            log.info("[PAYMENT_REQUEST] Webhook {} -> {} status={}", event, pr.webhookUrl(), resp.statusCode());
+    private void fireWebhookPaid(PaymentRequest pr, Transaction tx) {
+        dispatchWebhook(pr, WebhookEventType.PAYMENT_REQUEST_PAID, tx);
+    }
+
+    private void dispatchWebhook(PaymentRequest pr, WebhookEventType type, Transaction tx) {
+        try {
+            Map<String,Object> data = new LinkedHashMap<>();
+            data.put("payment_request_id", pr.id().toString());
+            data.put("short_code", pr.shortCode().value());
+            data.put("status", pr.status().name());
+            data.put("amount", pr.amount().amount().toPlainString());
+            data.put("currency", pr.amount().currency().isoCode());
+            if (pr.orderReference() != null) data.put("order_reference", pr.orderReference());
+            if (tx != null) data.put("transaction_id", tx.id().toString());
+            data.put("occurred_at", Instant.now().toString());
+
+            webhooks.dispatchTo(pr.merchantUserId(), type, pr.id().uuid(), "PAYMENT_REQUEST",
+                    data, pr.webhookUrl());
         } catch (Exception e) {
-            log.warn("[PAYMENT_REQUEST] Webhook {} a {} falló: {}", event, pr.webhookUrl(), e.getMessage());
+            log.warn("[PAYMENT_REQUEST] Webhook {} de {} falló: {}", type, pr.id(), e.getMessage());
         }
     }
 
