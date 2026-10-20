@@ -48,8 +48,8 @@ class TransactionRollbackIT extends AbstractIntegrationTest {
         wA.credit(aSeed, "seedA"); walletRepository.save(wA);
         wB.credit(bSeed, "seedB"); walletRepository.save(wB);
 
-        if (failure == Failure.FROZEN) {
-            wallets.freeze(wB.id());
+          if (failure == Failure.FROZEN) {
+              wallets.freeze(wA.id());
         }
 
         // The oversized note fails in PostgreSQL AFTER both wallet writes.

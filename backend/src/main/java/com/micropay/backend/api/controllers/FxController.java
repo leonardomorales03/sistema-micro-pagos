@@ -68,7 +68,7 @@ public class FxController {
             @ApiResponse(responseCode = "422", description = "Flag multi-moneda OFF o regla de negocio violada")
     })
     @PostMapping("/convert")
-    @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(#req.walletId.toString(), authentication)")
+    @PreAuthorize("hasRole('ADMIN') or @walletSecurity.isOwner(#req.walletId.toString(), authentication)")
     public ResponseEntity<FxDtos.ConvertResponse> convert(
             @Valid @RequestBody FxDtos.ConvertRequest req,
             @Parameter(hidden = true) @CurrentUser UserId currentUser) {

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Optional;
@@ -27,6 +28,7 @@ public class JjwtVerifiableTokenService implements VerifiableTokenService {
     private static final Logger log = LoggerFactory.getLogger(JjwtVerifiableTokenService.class);
     private static final String CLAIM_PURPOSE = "purpose";
     private static final long DEFAULT_TTL = 10 * 60 * 1000L; // 10 minutos
+    private static final SecureRandom RND = new SecureRandom();
 
     private final SecretKey signKey;
     private final String issuer;
@@ -36,12 +38,21 @@ public class JjwtVerifiableTokenService implements VerifiableTokenService {
             @Value("${micropay.jwt.issuer:micropay-backend}") String issuer
     ) {
         this.issuer = issuer;
-        byte[] k = (secretKey == null || secretKey.isBlank() ? UUID.randomUUID().toString() : secretKey)
-                .getBytes(StandardCharsets.UTF_8);
-        if (k.length < 32) {
-            byte[] padded = new byte[64];
-            System.arraycopy(k, 0, padded, 0, k.length);
-            k = padded;
+        byte[] k;
+        if (secretKey == null || secretKey.isBlank()) {
+            // HS512 exige clave >= 512 bits (64 bytes): un UUID (36 bytes) NO es suficiente.
+            k = new byte[64];
+            RND.nextBytes(k);
+            log.warn("⚠️  MICROPAY_JWT_SECRET_KEY no configurada: clave efímera de 512 bits para tokens de verificación. " +
+                    "¡NO USAR EN PRODUCCIÓN! (Los tokens expiran al reiniciar el proceso)");
+        } else {
+            k = secretKey.getBytes(StandardCharsets.UTF_8);
+            if (k.length < 32) {
+                byte[] padded = new byte[64];
+                System.arraycopy(k, 0, padded, 0, k.length);
+                k = padded;
+                log.warn("⚠️  Longitud secret-key < 32 bytes; completada con padding a 64 bytes (HS512).");
+            }
         }
         this.signKey = Keys.hmacShaKeyFor(k);
     }

@@ -46,7 +46,7 @@ public class TransactionController {
             @ApiResponse(responseCode = "422", description = "Saldo insuficiente / moneda distinta / regla negocio violada"),
             @ApiResponse(responseCode = "428", description = "Challenge de riesgo requerido (step-up)")
     })
-    @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(#req.walletFromId.toString(), authentication)")
+    @PreAuthorize("hasRole('ADMIN') or @walletSecurity.isOwner(#req.walletFromId.toString(), authentication)")
     public ResponseEntity<TransactionDtos.TransactionResponse> transferP2P(
             @RequestBody TransactionDtos.TransferRequest req,
             @Parameter(hidden = true) @CurrentUser UserId currentUser,
@@ -65,7 +65,7 @@ public class TransactionController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Buscar transacción por ID (ADMIN o participant wallet owner)")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TransactionDtos.TransactionResponse> findById(@PathVariable UUID id) {
         Transaction t = tx.findById(TransactionId.from(id))
                 .orElseThrow(() -> new TransactionNotFoundException(id));
@@ -74,7 +74,7 @@ public class TransactionController {
 
     @GetMapping(params = "short_code")
     @Operation(summary = "Buscar transacción por short_code (QR Payments)")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TransactionDtos.TransactionResponse> findByShortCode(@RequestParam("short_code") String shortCode) {
         Transaction t = tx.findByShortCode(new ShortCode(shortCode))
                 .orElseThrow(() -> new TransactionNotFoundException("short_code=" + shortCode));
@@ -83,7 +83,7 @@ public class TransactionController {
 
     @GetMapping
     @Operation(summary = "Listar transacciones de una wallet (paginado — wallet owner o ADMIN)")
-    @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(#walletId.toString(), authentication)")
+    @PreAuthorize("hasRole('ADMIN') or @walletSecurity.isOwner(#walletId.toString(), authentication)")
     public ResponseEntity<List<TransactionDtos.TransactionResponse>> listByWallet(
             @RequestParam("wallet_id") UUID walletId,
             @RequestParam(defaultValue = "0") int page,

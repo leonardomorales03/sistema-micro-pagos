@@ -72,7 +72,7 @@ public class TopUpController {
 
     @Operation(summary = "Consultar recarga por ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(" +
+    @PreAuthorize("hasRole('ADMIN') or @walletSecurity.isOwner(" +
             "@topUpController.walletIdForTopUp(#id).toString(), authentication)")
     public ResponseEntity<TopUpDtos.TopUpResponse> findById(@PathVariable UUID id) {
         return topUps.findById(TopUpId.from(id))
@@ -82,7 +82,7 @@ public class TopUpController {
 
     @Operation(summary = "Listar recargas de wallet (owner o ADMIN)")
     @GetMapping
-    @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(#walletId.toString(), authentication)")
+    @PreAuthorize("hasRole('ADMIN') or @walletSecurity.isOwner(#walletId.toString(), authentication)")
     public ResponseEntity<TopUpDtos.TopUpListResponse> listByWallet(
             @RequestParam("wallet_id") UUID walletId,
             @RequestParam(value = "page", defaultValue = "0") int page,

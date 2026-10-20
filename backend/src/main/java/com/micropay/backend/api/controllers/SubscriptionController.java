@@ -111,7 +111,7 @@ public class SubscriptionController {
             @ApiResponse(responseCode = "403", description = "Requiere ROLE_ADMIN.")
     })
     @PostMapping("/billing/run")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<SubscriptionDtos.BillingRunResponse> runBilling() {
         SubscriptionBillingService.BillingRunSummary s = billing.runBillingCycle();
         return ResponseEntity.ok(new SubscriptionDtos.BillingRunResponse(

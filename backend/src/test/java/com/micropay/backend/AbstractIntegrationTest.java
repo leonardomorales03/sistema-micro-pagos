@@ -40,10 +40,15 @@ public abstract class AbstractIntegrationTest {
             throw new IllegalStateException("Integration cleanup requires micropay_test");
         }
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> testJdbc.execute("""
-                TRUNCATE account_moves, transactions, withdrawals, payout_destinations,
-                         topups, payment_requests, notifications,
-                         risk_incidents, sessions, kyc_documents,
-                         user_profiles, tier_limits, wallets, users
+                  TRUNCATE account_moves, fee_ledger, refunds, withdrawals,
+                           subscriptions, referrals, webhook_deliveries,
+                           merchant_webhook_configs, user_notifications,
+                           report_exports, reconciliation_mismatches,
+                           reconciliation_runs, audit_events, topups,
+                           payment_requests, risk_incidents, sessions,
+                           kyc_documents, payout_destinations, plans,
+                           transactions, user_profiles, tier_limits,
+                           wallets, users CASCADE
                 """));
         flushAllRedis();
     }

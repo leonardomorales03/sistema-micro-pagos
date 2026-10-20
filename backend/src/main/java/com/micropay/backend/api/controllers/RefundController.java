@@ -58,7 +58,7 @@ public class RefundController {
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(@refundController.recipientWalletId(#txId), authentication)")
+    @PreAuthorize("hasRole('ADMIN') or @walletSecurity.isOwner(@refundController.recipientWalletId(#txId), authentication)")
     public ResponseEntity<RefundDtos.RefundResponse> create(
             @PathVariable UUID txId,
             @Valid @RequestBody RefundDtos.CreateRefundRequest req,
@@ -73,7 +73,7 @@ public class RefundController {
 
     @Operation(summary = "Listar historial de reembolsos de una transacción (receptor o ADMIN)")
     @GetMapping
-    @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(@refundController.recipientWalletId(#txId), authentication)")
+    @PreAuthorize("hasRole('ADMIN') or @walletSecurity.isOwner(@refundController.recipientWalletId(#txId), authentication)")
     public ResponseEntity<RefundDtos.RefundListResponse> list(@PathVariable UUID txId) {
         List<Refund> rows = refunds.listBySourceTransaction(TransactionId.from(txId));
         return ResponseEntity.ok(new RefundDtos.RefundListResponse(

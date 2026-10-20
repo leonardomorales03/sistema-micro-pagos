@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * Bean de seguridad para @PreAuthorize SpEL.
- * Uso en controller: @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(#walletId, authentication)")
+ * Uso en controller: @PreAuthorize("hasRole('ADMIN') or @walletSecurity.isOwner(#walletId, authentication)")
  */
 @Component("walletSecurity")
 public class WalletSecurity {

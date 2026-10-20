@@ -62,7 +62,7 @@ public class WithdrawalController {
 
     @Operation(summary = "Consultar retiro por ID (owner o ADMIN)")
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(" +
+    @PreAuthorize("hasRole('ADMIN') or @walletSecurity.isOwner(" +
             "@withdrawalController.walletIdForWithdrawal(#id), authentication)")
     public ResponseEntity<WithdrawalDtos.WithdrawalResponse> findById(@PathVariable UUID id) {
         return withdrawals.findById(WithdrawalId.from(id))
@@ -72,7 +72,7 @@ public class WithdrawalController {
 
     @Operation(summary = "Listar retiros de la wallet (owner o ADMIN)")
     @GetMapping
-    @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(#walletId.toString(), authentication)")
+    @PreAuthorize("hasRole('ADMIN') or @walletSecurity.isOwner(#walletId.toString(), authentication)")
     public ResponseEntity<WithdrawalDtos.WithdrawalListResponse> listByWallet(
             @RequestParam("wallet_id") UUID walletId,
             @RequestParam(value = "page", defaultValue = "0") int page,

@@ -53,7 +53,7 @@ public class WalletController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ROLE_ADMIN') or @walletSecurity.isOwner(#id, authentication)")
+    @PreAuthorize("hasRole('ADMIN') or @walletSecurity.isOwner(#id, authentication)")
     @Operation(summary = "Obtener wallet por ID (propietario o ADMIN)")
     public ResponseEntity<WalletDtos.WalletResponse> findById(@PathVariable UUID id) {
         Wallet w = wallets.getByIdOrThrow(WalletId.from(id));
@@ -61,21 +61,21 @@ public class WalletController {
     }
 
     @PostMapping("/{id}/freeze")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Congelar wallet (sólo ADMIN)")
     public ResponseEntity<WalletDtos.WalletResponse> freeze(@PathVariable UUID id) {
         return ResponseEntity.ok(toResp(wallets.freeze(WalletId.from(id))));
     }
 
     @PostMapping("/{id}/close")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Cerrar wallet (sólo ADMIN)")
     public ResponseEntity<WalletDtos.WalletResponse> close(@PathVariable UUID id) {
         return ResponseEntity.ok(toResp(wallets.close(WalletId.from(id))));
     }
 
     @PostMapping("/{id}/activate")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Activar wallet congelada/cerrada (sólo ADMIN)")
     public ResponseEntity<WalletDtos.WalletResponse> activate(@PathVariable UUID id) {
         return ResponseEntity.ok(toResp(wallets.activate(WalletId.from(id))));

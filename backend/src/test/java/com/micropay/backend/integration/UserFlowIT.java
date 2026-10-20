@@ -55,25 +55,23 @@ class UserFlowIT extends AbstractIntegrationTest {
         String transactionId = json.readTree(response).path("id").asText();
         mvc.perform(get("/api/v1/transactions/" + transactionId)
                         .header("Authorization", "Bearer " + aliceToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.account_moves.length()").value(2));
+                .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/transactions").param("wallet_id", alice.uuid().toString())
                         .header("Authorization", "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(transactionId));
 
-        transfer(bobToken, request).andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.error_code")
-                        .value("BUSINESS_RULE_VIOLATION_WALLET_NOT_OWNED_BY_USER"));
+        transfer(bobToken, request).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error_code").value("ACCESS_DENIED"));
         transfer(aliceToken, Map.of("wallet_from_id", alice.uuid(), "wallet_to_id", bob.uuid(),
                         "amount", 8000, "currency", "USD"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.error_code")
                         .value("BUSINESS_RULE_VIOLATION_INSUFFICIENT_AVAILABLE_BALANCE"));
-        wallets.freeze(bob);
+        wallets.freeze(alice);
         transfer(aliceToken, request).andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.error_code").value("BUSINESS_RULE_VIOLATION_WALLET_NOT_ACTIVE"));
-        wallets.activate(bob);
+        wallets.activate(alice);
 
         // Occupy the second lock: failed acquisition must release only the first.
         WalletId second = alice.uuid().compareTo(bob.uuid()) < 0 ? bob : alice;

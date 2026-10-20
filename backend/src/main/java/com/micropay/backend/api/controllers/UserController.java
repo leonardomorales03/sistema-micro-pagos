@@ -192,7 +192,7 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ROLE_ADMIN') or #id == authentication.principal.userId")
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.userId")
     @Operation(summary = "Buscar usuario por ID (ROLE_USER propio, ROLE_ADMIN cualquiera)",
                security = @SecurityRequirement(name = "bearerAuth"))
     @SecurityRequirement(name = "bearerAuth")
@@ -203,7 +203,7 @@ public class UserController {
     }
 
     @GetMapping(params = {"email"})
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Buscar usuario por email (sólo ADMIN)", security = @SecurityRequirement(name = "bearerAuth"))
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<UserDtos.UserResponse> findByEmail(@RequestParam String email) {
@@ -213,7 +213,7 @@ public class UserController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Listar usuarios (sólo ADMIN, paginado)", security = @SecurityRequirement(name = "bearerAuth"))
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<List<UserDtos.UserResponse>> list(
@@ -252,7 +252,7 @@ public class UserController {
     }
 
     @PostMapping("/{id}/upgrade-kyc")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Forzar upgrade nivel KYC manualmente (sólo ADMIN)",
                security = @SecurityRequirement(name = "bearerAuth"))
     @SecurityRequirement(name = "bearerAuth")
@@ -276,7 +276,7 @@ public class UserController {
     }
 
     @PostMapping("/{id}/block")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Bloquear usuario (sólo ADMIN)", security = @SecurityRequirement(name = "bearerAuth"))
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Void> block(@PathVariable UUID id,
@@ -287,7 +287,7 @@ public class UserController {
     }
 
     @PostMapping("/{id}/unblock")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Desbloquear usuario (sólo ADMIN)", security = @SecurityRequirement(name = "bearerAuth"))
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Void> unblock(@PathVariable UUID id,

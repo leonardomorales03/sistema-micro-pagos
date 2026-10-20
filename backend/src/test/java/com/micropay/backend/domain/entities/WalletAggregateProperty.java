@@ -144,19 +144,24 @@ public class WalletAggregateProperty {
                 .isInstanceOf(BusinessRuleViolationException.class);
     }
 
-    /** Property: Wallet FROZEN lanza WALLET_NOT_ACTIVE en credit/debit; crédito NO se aplicó */
+    /** Property: Wallet FROZEN bloquea débitos/reservas, pero permite créditos entrantes */
     @Property(tries = 120)
     void p_frozen_status_prevents_operations(@ForAll("fundedWallet") Wallet w) {
         Money before = w.balance();
         w.freeze();
         Money amount = Money.of(BigDecimal.ONE, w.currency());
-        assertThatThrownBy(() -> w.credit(amount, "frozen credit"))
+
+        assertThatThrownBy(() -> w.debit(amount, "frozen debit"))
                 .isInstanceOf(BusinessRuleViolationException.class)
                 .extracting(ex -> ((BusinessRuleViolationException) ex).getCode())
                 .asString().contains("WALLET_NOT_ACTIVE");
-        assertThat(w.balance()).isEqualTo(before);
-        w.activate();
-        w.credit(amount, "unfrozen credit");
+
+        assertThatThrownBy(() -> w.reserve(amount, "frozen reserve"))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .extracting(ex -> ((BusinessRuleViolationException) ex).getCode())
+                .asString().contains("WALLET_NOT_ACTIVE");
+
+        w.credit(amount, "frozen credit");
         assertThat(w.balance().amount()).isGreaterThan(before.amount());
     }
 

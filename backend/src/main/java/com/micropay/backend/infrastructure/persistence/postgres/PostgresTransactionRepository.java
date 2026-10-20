@@ -10,9 +10,12 @@ import com.micropay.backend.infrastructure.persistence.jpa.repositories.AccountM
 import com.micropay.backend.infrastructure.persistence.jpa.repositories.TransactionJpaRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.criteria.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -84,15 +87,45 @@ public class PostgresTransactionRepository implements TransactionRepository {
     public List<Transaction> search(UUID walletId, String type, String status, String currency,
                                     java.time.Instant from, java.time.Instant to,
                                     int page, int pageSize) {
-        TransactionJpa.TxType txType = type == null || type.isBlank() ? null : TransactionJpa.TxType.valueOf(type.trim().toUpperCase());
-        TransactionJpa.TxStatus txStatus = status == null || status.isBlank() ? null : TransactionJpa.TxStatus.valueOf(status.trim().toUpperCase());
-        String cur = currency == null || currency.isBlank() ? null : currency.trim().toUpperCase();
         int p = Math.max(0, page);
         int size = Math.min(200, Math.max(1, pageSize));
-        return txJpa.search(walletId, txType, txStatus, cur, from, to, PageRequest.of(p, size))
+        PageRequest pageable = PageRequest.of(p, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return txJpa.findAll(searchSpec(walletId, type, status, currency, from, to), pageable)
                 .stream()
                 .map(j -> toDomain(j, List.of()))
                 .toList();
+    }
+
+    /**
+     * Especificación dinámica (T24/T25) con filtros opcionales. Se usa Criteria API en lugar de JPQL
+     * con {@code :param IS NULL} para evitar el error de PostgreSQL "could not determine data type of parameter".
+     */
+    private static Specification<TransactionJpa> searchSpec(UUID walletId, String type, String status,
+                                                            String currency,
+                                                            java.time.Instant from, java.time.Instant to) {
+        return (root, query, cb) -> {
+            List<Predicate> ps = new ArrayList<>();
+            if (walletId != null) {
+                ps.add(cb.or(cb.equal(root.get("walletFromId"), walletId),
+                             cb.equal(root.get("walletToId"), walletId)));
+            }
+            if (type != null && !type.isBlank()) {
+                ps.add(cb.equal(root.get("type"), TransactionJpa.TxType.valueOf(type.trim().toUpperCase())));
+            }
+            if (status != null && !status.isBlank()) {
+                ps.add(cb.equal(root.get("status"), TransactionJpa.TxStatus.valueOf(status.trim().toUpperCase())));
+            }
+            if (currency != null && !currency.isBlank()) {
+                ps.add(cb.equal(root.get("currency"), currency.trim().toUpperCase()));
+            }
+            if (from != null) {
+                ps.add(cb.greaterThanOrEqualTo(root.get("createdAt"), from));
+            }
+            if (to != null) {
+                ps.add(cb.lessThanOrEqualTo(root.get("createdAt"), to));
+            }
+            return ps.isEmpty() ? cb.conjunction() : cb.and(ps.toArray(new Predicate[0]));
+        };
     }
 
     @Override
