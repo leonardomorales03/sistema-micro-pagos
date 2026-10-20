@@ -80,6 +80,7 @@ public class SecurityConfig {
                         // 1b. TopUps Sandbox approve (mock redirect desde proveedor) + Webhooks proveedor pagos
                         .requestMatchers(
                                 "/api/v1/top-ups/mock-approve/**",
+                                "/api/v1/withdrawals/sandbox/**",
                                 "/api/v1/webhooks/**"
                         ).permitAll()
                         // 2. Swagger / SpringDoc público

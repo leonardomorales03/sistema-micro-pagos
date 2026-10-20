@@ -1,6 +1,7 @@
 package com.micropay.backend.api.controllers;
 
 import com.micropay.backend.application.services.TopUpService;
+import com.micropay.backend.application.services.WithdrawalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -19,8 +20,12 @@ public class WebhookController {
     private static final Logger log = LoggerFactory.getLogger(WebhookController.class);
 
     private final TopUpService topUps;
+    private final WithdrawalService withdrawals;
 
-    public WebhookController(TopUpService topUps) { this.topUps = topUps; }
+    public WebhookController(TopUpService topUps, WithdrawalService withdrawals) {
+        this.topUps = topUps;
+        this.withdrawals = withdrawals;
+    }
 
     @Operation(summary = "Stripe / Stripe-Sandbox webhook (TopUps succeeded/failed/refunded)",
                description = "PÚBLICO sin auth. Valida HMAC SHA256 header `Stripe-Signature`;" +
@@ -46,6 +51,31 @@ public class WebhookController {
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
         } catch (Exception ex) {
             log.warn("[WEBHOOK] stripe handle error: {}", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+    }
+
+    @Operation(summary = "Stripe Payouts webhook (Withdrawals completed/failed/returned)",
+               description = "PÚBLICO sin auth. Valida HMAC SHA256 header `Stripe-Signature`;" +
+                             " COMPLETED consume el hold (confirmReserveAsDebit); FAILED/RETURNED libera el hold. Idempotente.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Procesado OK (o evento desconocido aceptado sin accionar)."),
+            @ApiResponse(responseCode = "401", description = "Firma Stripe-Signature inválida."),
+            @ApiResponse(responseCode = "400", description = "Payload inválido.")
+    })
+    @PostMapping("/gateways/stripe-payouts")
+    public ResponseEntity<Void> stripePayoutsWebhook(@RequestBody(required = false) String rawBody,
+                                                     @RequestHeader(value = "Stripe-Signature", required = false) String stripeSignature,
+                                                     @RequestHeader(value = "X-Stripe-Signature", required = false) String xStripeSignature) {
+        String sig = stripeSignature != null ? stripeSignature : xStripeSignature;
+        try {
+            int code = withdrawals.handlePayoutUpdate(rawBody, sig);
+            return switch (code) {
+                case 1 -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+                default -> ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+            };
+        } catch (Exception ex) {
+            log.warn("[WEBHOOK] stripe payouts handle error: {}", ex.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
     }

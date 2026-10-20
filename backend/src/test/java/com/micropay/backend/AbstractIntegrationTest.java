@@ -40,7 +40,8 @@ public abstract class AbstractIntegrationTest {
             throw new IllegalStateException("Integration cleanup requires micropay_test");
         }
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> testJdbc.execute("""
-                TRUNCATE account_moves, transactions, topups, payment_requests, notifications,
+                TRUNCATE account_moves, transactions, withdrawals, payout_destinations,
+                         topups, payment_requests, notifications,
                          risk_incidents, sessions, kyc_documents,
                          user_profiles, tier_limits, wallets, users
                 """));

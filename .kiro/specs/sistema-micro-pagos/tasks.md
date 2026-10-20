@@ -438,25 +438,33 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - ⚠️ 5 IT classes **/*IT.java siguen omitidos temporalmente (-DskipITs=true). Reparar classpath NoClassDef + JaCoCo 80/70%: T28 (antes CI/CD).
 
 
-- [ ] 18. Retiros (Withdrawals) + Payout Destinations + Payout Provider
-  - [ ] 18.1 Dominio: `Withdrawal`, `PayoutDestination` + ports
-    - Validación KYC ≥ VERIFIED antes de crear retiro
+- [x] 18. Retiros (Withdrawals) + Payout Destinations + Payout Provider
+  - [x] 18.1 Dominio: `Withdrawal`, `PayoutDestination` + ports
+    - Validación KYC ≥ VERIFIED antes de crear retiro (`KycLevel.LEVEL_1.atLeast`)
     - `PayoutProviderPort`, `WithdrawalRepository`, `PayoutDestinationRepository`
     - _Requisitos: 20.1, 20.3, 20.5_
-  - [ ] 18.2 RequestWithdrawalUseCase con reserva de balance
-    - @Transactional: validar límites → crear WITHDRAWAL tx → debitar wallet (reserva)
-    - Llamar payout provider initiate; guardar provider_ref
+  - [x] 18.2 RequestWithdrawalUseCase con reserva de balance (`WithdrawalService.requestWithdrawal`)
+    - @Transactional: validar KYC + destino verificado + límites → `wallet.reserve()` → crear WITHDRAWAL tx (1 AccountMove DÉBITO)
+    - Llamar payout provider initiate; guardar provider_ref → Withdrawal PROCESSING
     - _Requisitos: 20.2, 20.6_
-  - [ ] 18.3 HandlePayoutUpdateUseCase + reversa en fallo
-    - polling o webhook payout: si FAILED → unreserve (acreditar) wallet + marcar WITHDRAWAL FAILED
-    - si COMPLETED → marcar COMPLETED; guardar auditoría
+  - [x] 18.3 HandlePayoutUpdateUseCase + reversa en fallo (`WithdrawalService.handlePayoutUpdate`)
+    - webhook payout (`POST /api/v1/webhooks/gateways/stripe-payouts`): si FAILED/RETURNED → `releaseReserve` (libera hold) + marcar WITHDRAWAL FAILED
+    - si COMPLETED → `confirmReserveAsDebit` (consume hold) + marcar COMPLETED; auditoría
     - _Requisitos: 20.3, 20.4_
-  - [ ] 18.4 CRUD payout destinations (masked labels + verified_at flag)
-    - Endpoints: CRUD `/api/v1/me/payout-destinations`, set default
+  - [x] 18.4 CRUD payout destinations (masked labels + verified flag)
+    - Endpoints: CRUD `/api/v1/me/payout-destinations`, set default, verify (sandbox auto-verifica)
+    - SEGURIDAD: sólo se persiste número enmascarado + last4
     - _Requisitos: 20.5_
   - [ ]* 18.5 Property test invariante reserva fallida
     - **Property 24: Reservas en retiros fallidos**
     - _Valida: Requisitos 20.4_
+    - 🚧 *OMITIDO TEMPORALMENTE (T18 → T28) junto con ITs omitidos y cobertura 80/70%. Prioridad core funcional según orden usuario.*
+  - ⚠️ **Notas T18 build 2026-10-19:**
+    - ✅ Build: `mvn -f backend/pom.xml verify -Pintegration,local-progress -DskipITs=true` BUILD SUCCESS. 35 PBT green.
+    - ✅ Boundaries: `scripts/check-boundaries.sh` exit 0, 0 infracciones hexágono.
+    - ⚠️ Sandbox: endpoints públicos `GET /api/v1/withdrawals/sandbox/complete|fail/{providerRef}` (simulan webhook payout sin loopback).
+    - ⚠️ `payout_destinations` FK ON DELETE RESTRICT desde withdrawals; no se puede borrar el destino default.
+
 
 - [ ] 19. Payment Requests (Links/QR Comercio)
   - [ ] 19.1 Dominio PaymentRequest + ShortCode generator único
