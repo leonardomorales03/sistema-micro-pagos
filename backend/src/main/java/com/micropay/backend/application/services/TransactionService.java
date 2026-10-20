@@ -56,6 +56,7 @@ public class TransactionService implements TransactionUseCases {
     private final RiskCheckAdapter riskEngine;
     private final NotificationAdapter notifications;
     private final UserRepository users;
+    private final FeeService feeService;
     private final org.springframework.retry.support.RetryTemplate transferRetryTemplate;
     private final TransactionTemplate transferTransaction;
 
@@ -65,6 +66,7 @@ public class TransactionService implements TransactionUseCases {
                               RiskCheckAdapter riskEngine,
                               NotificationAdapter notifications,
                               UserRepository users,
+                              FeeService feeService,
                               @Qualifier("transferRetryTemplate")
                               org.springframework.retry.support.RetryTemplate transferRetryTemplate,
                               PlatformTransactionManager transactionManager) {
@@ -74,6 +76,7 @@ public class TransactionService implements TransactionUseCases {
         this.riskEngine = riskEngine;
         this.notifications = notifications;
         this.users = users;
+        this.feeService = feeService;
         this.transferRetryTemplate = transferRetryTemplate;
         this.transferTransaction = new TransactionTemplate(transactionManager);
         this.transferTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -86,11 +89,25 @@ public class TransactionService implements TransactionUseCases {
                                    Money amount,
                                    UserId initiatedBy,
                                    String note) {
+        return transferP2P(fromWalletId, toWalletId, amount, initiatedBy, note, FeeOperation.TRANSFER_P2P);
+    }
+
+    /**
+     * Igual que {@link #transferP2P} pero permite fijar la operación del FeeEngine
+     * (p. ej. PAYMENT_REQUEST para aplicar el MDR del comercio en lugar de la tarifa P2P).
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Transaction transferP2P(WalletId fromWalletId,
+                                   WalletId toWalletId,
+                                   Money amount,
+                                   UserId initiatedBy,
+                                   String note,
+                                   FeeOperation feeOperation) {
         try {
             return transferRetryTemplate.execute(
                     ctx -> {
                         try {
-                            return doTransferP2P(1 + ctx.getRetryCount(), fromWalletId, toWalletId, amount, initiatedBy, note);
+                            return doTransferP2P(1 + ctx.getRetryCount(), fromWalletId, toWalletId, amount, initiatedBy, note, feeOperation);
                         } catch (RuntimeException ex) {
                             throw classifyForRetry(ex);
                         }
@@ -188,7 +205,8 @@ public class TransactionService implements TransactionUseCases {
                                      WalletId toWalletId,
                                      Money amount,
                                      UserId initiatedBy,
-                                     String note) {
+                                     String note,
+                                     FeeOperation feeOperation) {
         if (fromWalletId == null) throw new IllegalArgumentException("fromWalletId");
         if (toWalletId == null) throw new IllegalArgumentException("toWalletId");
         if (fromWalletId.equals(toWalletId)) {
@@ -249,12 +267,16 @@ public class TransactionService implements TransactionUseCases {
                             rr.detail());
                 }
 
-                // 3. Debito from + crédito to — aplica 7 reglas negocio en domain Wallet methods
-                Money zeroFee = Money.zero(amount.currency());
-                Money balanceAfterDebit = from.debit(amount, "transferP2P");
-                Money balanceAfterCredit = to.credit(amount, "transferP2P");
+                // 3. FeeEngine (Requisito 30.2): comisión deducida atómicamente. Default 0.
+                FeeContext feeCtx = FeeContext.of(feeOperation, amount);
+                Money fee = feeService.quoteTotal(feeCtx);
+                Money net = amount.subtract(fee);
 
-                // 4. Salvar wallets actualizados → optimist lock @Version incrementa o falla si colisión
+                // 4. Debito from + crédito to — aplica 7 reglas negocio en domain Wallet methods
+                Money balanceAfterDebit = from.debit(amount, "transferP2P");
+                Money balanceAfterCredit = to.credit(net, "transferP2P");
+
+                // 5. Salvar wallets actualizados → optimist lock @Version incrementa o falla si colisión
                 Wallet savedFrom = wallets.save(from);
                 Wallet savedTo = wallets.save(to);
 
@@ -263,8 +285,8 @@ public class TransactionService implements TransactionUseCases {
                         .walletFromId(fromWalletId)
                         .walletToId(toWalletId)
                         .grossAmount(amount)
-                        .netAmount(amount)
-                        .feeAmount(zeroFee)
+                        .netAmount(net)
+                        .feeAmount(fee)
                         .status(TransactionStatus.COMPLETED)
                         .createdBy(initiatedBy.uuid())
                         .note(note);
@@ -280,11 +302,14 @@ public class TransactionService implements TransactionUseCases {
                         balanceAfterDebit, Instant.now()));
                 moves.add(new AccountMove(UUID.randomUUID(),
                         toWalletId, tx.id(),
-                        amount, balanceAfterCredit, Instant.now()));
+                        net, balanceAfterCredit, Instant.now()));
                 txBuilder.accountMoves(moves);
                 tx = txBuilder.build();
 
                 Transaction savedTx = transactions.save(tx);
+
+                // 6. Registrar asientos de comisión ligados a la tx (misma transacción DB)
+                feeService.applyAndRecord(savedTx, feeCtx);
 
                 // Publish success only after the database commit has succeeded.
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {

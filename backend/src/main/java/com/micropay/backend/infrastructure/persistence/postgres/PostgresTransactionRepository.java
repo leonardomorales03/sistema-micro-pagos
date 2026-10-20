@@ -77,6 +77,16 @@ public class PostgresTransactionRepository implements TransactionRepository {
                 .toList();
     }
 
+    @Override
+    @Transactional
+    public void updateStatus(TransactionId id, com.micropay.backend.domain.valueobjects.TransactionStatus status) {
+        txJpa.findById(id.uuid()).ifPresent(j -> {
+            j.setStatus(TransactionJpa.TxStatus.valueOf(status.name()));
+            j.setUpdatedAt(java.time.Instant.now());
+            txJpa.save(j);
+        });
+    }
+
     // ──────────────── MAPPERS ────────────────
 
     Transaction toDomain(TransactionJpa j, List<AccountMove> moves) {

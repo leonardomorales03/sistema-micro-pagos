@@ -241,3 +241,21 @@ micropay.referrals:
   reward-percent: 0.05
   withdrawal-threshold-amount: 10.00
   withdrawal-threshold-currency: USD
+
+# =============================================================
+#  FEES — FeeEngine configurable y versionado (Requisito 30)
+#  Todos en 0 por defecto (sin comisión). Al activar una tarifa,
+#  subir `version` para que las tx históricas referencien su regla.
+# =============================================================
+micropay.fees:
+  version: v1-default
+  transfer-p2p:
+    percentage: 0
+  topup:
+    percentage: 0
+  withdrawal:
+    flat: 0
+  payment-request:
+    mdr-percentage: 0
+  subscription:
+    percentage: 0

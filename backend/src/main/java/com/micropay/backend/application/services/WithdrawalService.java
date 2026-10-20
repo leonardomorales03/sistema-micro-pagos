@@ -60,6 +60,7 @@ public class WithdrawalService {
     private final UserRepository users;
     private final PayoutProviderPort payouts;
     private final NotificationAdapter notifications;
+    private final FeeService feeService;
 
     public WithdrawalService(WithdrawalRepository withdrawals,
                              PayoutDestinationRepository destinations,
@@ -67,7 +68,8 @@ public class WithdrawalService {
                              TransactionRepository transactions,
                              UserRepository users,
                              PayoutProviderPort payouts,
-                             NotificationAdapter notifications) {
+                             NotificationAdapter notifications,
+                             FeeService feeService) {
         this.withdrawals = withdrawals;
         this.destinations = destinations;
         this.wallets = wallets;
@@ -75,6 +77,7 @@ public class WithdrawalService {
         this.users = users;
         this.payouts = payouts;
         this.notifications = notifications;
+        this.feeService = feeService;
     }
 
     // ────────────────── 1. Solicitar retiro (BR 20.1/20.2/20.6) ──────────────────
@@ -125,8 +128,10 @@ public class WithdrawalService {
         }
 
         Currency cur = amount.currency();
-        Money fee = Money.zero(cur);
-        Money net = amount.subtract(fee); // sin comisión en sandbox: net = gross
+        // FeeEngine (Requisito 30.2): flat + provider fee sobre el retiro. Default 0.
+        FeeContext feeCtx = FeeContext.of(FeeOperation.WITHDRAWAL, amount);
+        Money fee = feeService.quoteTotal(feeCtx);
+        Money net = amount.subtract(fee);
 
         // 1. Reserva de fondos (hold) sobre la wallet
         wallet.reserve(amount, "withdraw request");
@@ -174,7 +179,10 @@ public class WithdrawalService {
         moves.add(new AccountMove(UUID.randomUUID(), walletId, tx.id(),
                 Money.of(amount.amount().negate(), cur), balanceAfter, Instant.now()));
         txB.accountMoves(moves);
-        transactions.save(txB.build());
+        Transaction savedWithdrawalTx = transactions.save(txB.build());
+
+        // Asientos de comisión ligados a la tx (misma transacción DB)
+        feeService.applyAndRecord(savedWithdrawalTx, feeCtx);
 
         log.info("[WITHDRAWAL] Solicitado id={} wallet={} amount={} providerRef={} (fondos reservados)",
                 w.id(), walletId, amount, init.providerRef());

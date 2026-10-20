@@ -47,17 +47,20 @@ public class TopUpService {
     private final TransactionRepository transactions;
     private final PaymentProviderAdapter payments;
     private final NotificationAdapter notifications;
+    private final FeeService feeService;
 
     public TopUpService(TopUpRepository topUps,
                         WalletRepository wallets,
                         TransactionRepository transactions,
                         PaymentProviderAdapter payments,
-                        NotificationAdapter notifications) {
+                        NotificationAdapter notifications,
+                        FeeService feeService) {
         this.topUps = topUps;
         this.wallets = wallets;
         this.transactions = transactions;
         this.payments = payments;
         this.notifications = notifications;
+        this.feeService = feeService;
     }
 
     // ────────────────── 1. Crear checkout ──────────────────
@@ -150,8 +153,10 @@ public class TopUpService {
         Wallet wallet = wallets.findById(topUp.walletId())
                 .orElseThrow(() -> new WalletNotFoundException(topUp.walletId().uuid()));
 
-        Money creditAmount = topUp.netAmount();
-        Money creditAmountPositive = creditAmount;
+        // FeeEngine (Requisito 30.2): comisión sobre el top-up, deducida del crédito. Default 0.
+        FeeContext feeCtx = FeeContext.of(FeeOperation.TOPUP, topUp.grossAmount());
+        Money fee = feeService.quoteTotal(feeCtx);
+        Money creditAmountPositive = topUp.grossAmount().subtract(fee);
 
         Money balanceAfter = wallet.credit(creditAmountPositive, "TopUp webhook PAID providerRef=" + topUp.providerRef());
         wallets.save(wallet);
@@ -161,8 +166,8 @@ public class TopUpService {
                 .walletFromId(null)   // DEPOSIT: from=null
                 .walletToId(topUp.walletId())
                 .grossAmount(topUp.grossAmount())
-                .netAmount(topUp.netAmount())
-                .feeAmount(topUp.feeAmount())
+                .netAmount(creditAmountPositive)
+                .feeAmount(fee)
                 .status(TransactionStatus.COMPLETED)
                 .externalRef(topUp.providerRef())
                 .createdBy(topUp.userId().uuid())
@@ -171,9 +176,12 @@ public class TopUpService {
         List<AccountMove> moves = new ArrayList<>(1);
         moves.add(new AccountMove(UUID.randomUUID(),
                 topUp.walletId(), tx.id(),
-                creditAmount, balanceAfter, Instant.now()));
+                creditAmountPositive, balanceAfter, Instant.now()));
         txB.accountMoves(moves);
         Transaction savedTx = transactions.save(txB.build());
+
+        // Asientos de comisión ligados a la tx (misma transacción DB)
+        feeService.applyAndRecord(savedTx, feeCtx);
 
         topUp.markPaid(savedTx.id());
         topUps.save(topUp);

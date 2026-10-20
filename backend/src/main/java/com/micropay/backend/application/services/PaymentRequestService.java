@@ -15,6 +15,7 @@ import com.micropay.backend.domain.ports.out.TransactionRepository;
 import com.micropay.backend.domain.ports.out.UserRepository;
 import com.micropay.backend.domain.ports.out.WalletRepository;
 import com.micropay.backend.domain.valueobjects.Currency;
+import com.micropay.backend.domain.valueobjects.FeeOperation;
 import com.micropay.backend.domain.valueobjects.Money;
 import com.micropay.backend.domain.valueobjects.PaymentRequestId;
 import com.micropay.backend.domain.valueobjects.PaymentRequestStatus;
@@ -220,13 +221,15 @@ public class PaymentRequestService {
         // Límites por tier (KYC + país + moneda)
         tierLimits.assertSingleTxAllowed(customer.kycLevel(), DEFAULT_COUNTRY, pr.amount());
 
-        // Transferencia P2P atómica: valida saldo (debit aplica BR), monedas, riesgo y ledger 2 movimientos.
+        // Transferencia P2P atómica con MDR del comercio (FeeOperation.PAYMENT_REQUEST):
+        // valida saldo (debit aplica BR), monedas, riesgo y ledger 2 movimientos.
         Transaction tx = transactionService.transferP2P(
                 customerWallet.id(),
                 pr.merchantWalletId(),
                 pr.amount(),
                 customerId,
-                "PaymentRequest " + pr.shortCode().value());
+                "PaymentRequest " + pr.shortCode().value(),
+                FeeOperation.PAYMENT_REQUEST);
 
         pr.markPaid(tx.id());
         PaymentRequest saved = paymentRequests.save(pr);

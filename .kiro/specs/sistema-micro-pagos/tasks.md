@@ -522,21 +522,21 @@ Este plan implementa un sistema de micro-pagos con arquitectura hexagonal usando
     - _Valida: Requisitos 22.4_
 
 - [ ] 21. Refunds + FeeEngine
-  - [ ] 21.1 FeeEnginePort + adaptador de reglas config (DB/properties)
+  - [x] 21.1 FeeEnginePort + adaptador de reglas config (DB/properties)
     - FeeType: FLAT, PERCENTAGE, FX_SPREAD; FeeLines calculadas por contexto
     - Aplicación atómica: dentro de tx de operación se insertan entradas en `fee_ledger`
     - Reglas default iniciales: top-up %, withdrawal flat, MDR payment request, transfer P2P tier free
     - _Requisitos: 30.1, 30.2, 30.3, 30.4_
-  - [ ] 21.2 ApplyFeesAndCommissionsUseCase helper (llamado dentro de tx sensitivas)
+  - [x] 21.2 ApplyFeesAndCommissionsUseCase helper (llamado dentro de tx sensitivas)
     - Integración: ProcessTx, CreateTopUp, RequestWithdrawal, PayPaymentRequest, SubscriptionBilling
     - Auditoría: cada fee ligado a transaction_id + rule_version
     - _Requisitos: 30.2, 30.4, 30.5_
-  - [ ] 21.3 Dominio Refund + CreateRefundUseCase
+  - [x] 21.3 Dominio Refund + CreateRefundUseCase
     - `Refund` con sourceTxId, REFUND_TX_ID bidireccional, FULL/PARTIAL, reason
     - Validación: refunding party = recipient original o admin; amount ≤ refundable restante
     - Reverse transfer atomico + marcar source si TOTAL refounded
     - _Requisitos: 23.1, 23.2, 23.3, 23.4, 23.5, 23.6_
-  - [ ] 21.4 Endpoints Refund
+  - [x] 21.4 Endpoints Refund
     - `POST /api/v1/transactions/{id}/refunds` (role merchant o admin)
     - `GET /api/v1/transactions/{id}/refunds` listar historial
     - _Requisitos: 23.1, 23.2, 23.4_

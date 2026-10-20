@@ -125,6 +125,26 @@ public final class Transaction {
         return note;
     }
 
+    // ─────────────── COMPORTAMIENTO ───────────────
+
+    /**
+     * Marca la transacción como REFUNDED (Requirement 23.5) al reembolsarse por completo.
+     * Sólo válido desde COMPLETED. Idempotente si ya está REFUNDED.
+     */
+    public void markRefunded() {
+        if (this.status == TransactionStatus.REFUNDED) {
+            return;
+        }
+        if (this.status != TransactionStatus.COMPLETED) {
+            throw new com.micropay.backend.domain.exceptions.BusinessRuleViolationException(
+                    "TRANSACTION_NOT_REFUNDABLE",
+                    "Sólo una transacción COMPLETED puede marcarse REFUNDED (estado actual %s)"
+                            .formatted(this.status));
+        }
+        this.status = TransactionStatus.REFUNDED;
+        this.updatedAt = Instant.now();
+    }
+
     // ─────────────── BUILDER ───────────────
 
     public static Builder builder() {
